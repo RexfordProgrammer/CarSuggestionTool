@@ -1,0 +1,529 @@
+/* =========================
+   Theme & Resets
+   ========================= */
+:root {
+  --bg: #000000;
+  --fg: #ebf0f7;
+  --muted: #a7b4c2;
+  --card: #131a22;
+
+  /* Accent used for links + navbar */
+  --accent: #6aa8ff;
+
+  /* Button gradient stops (animated via @property) */
+  --btn-from: #232b5d;
+  --btn-to: #2216c4;
+  --btn-hover-from: #2e5cff;
+  --btn-hover-to: #2216c4;
+
+  /* Shadows & radii */
+  --radius: 1.5rem;
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, .25);
+  --ring: 0 0 0 3px #2e5cff66;
+
+  /* Navbar */
+  --nav-h: 64px;
+  --nav-maxw: 1100px;
+  --nav-padX: clamp(12px, 4vw, 28px);
+  --nav-bg: rgba(11, 16, 32, .78);
+  --nav-border: #ffffff1a;
+  --nav-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  --nav-blur: 10px;
+}
+
+/* Animate custom properties (for smooth gradient tween) */
+@property --btn-from {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #232b5d;
+}
+
+@property --btn-to {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2216c4;
+}
+
+/* Box sizing + sensible defaults */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+@supports not (overflow:clip) {
+
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  line-height: 1.55;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keep the app’s stacking context sane */
+#app {
+  position: relative;
+  isolation: isolate;
+}
+
+/* =========================
+   Typography & Links
+   ========================= */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 8px;
+}
+
+code {
+  background: rgba(255, 255, 255, .08);
+  padding: .15rem .4rem;
+  border-radius: 6px;
+}
+
+/* =========================
+   Layout & Containers
+   ========================= */
+header,
+footer {
+  padding: 1rem 0;
+}
+
+nav a {
+  margin-right: 1rem;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* =========================
+   Cards
+   ========================= */
+.card {
+  background: var(--card);
+  padding: 1.25rem;
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+}
+
+.futuristic-card {
+  position: relative;
+  z-index: 1;
+  margin: 8vh auto;
+  max-width: 420px;
+  background: rgba(15, 18, 34, .97);
+  border-radius: var(--radius);
+  box-shadow: 0 0 32px #2e5cff44, 0 0 8px #3a3ded33;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+  color: #e3e6f3;
+  border: 1.5px solid #2e5cff;
+  backdrop-filter: blur(4px);
+}
+
+/* Headings / text in the hero card */
+.glow {
+  font-size: 2.2rem;
+  color: #fff;
+  letter-spacing: 2px;
+  margin-bottom: .2em;
+  text-shadow: 0 0 12px #000, 0 0 32px #00000055;
+}
+
+.subtitle {
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 1.2em;
+  text-shadow: 0 0 8px #00000088;
+}
+
+.intro {
+  font-size: 1.1rem;
+  margin-bottom: 1.5em;
+}
+
+.tagline {
+  display: block;
+  margin-top: 1em;
+  color: #ffffffcc;
+  font-style: italic;
+  font-size: 1rem;
+}
+
+/* =========================
+   Links & Buttons
+   ========================= */
+.links {
+  margin: 2em 0 1em;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5em;
+}
+
+.futuristic-link {
+  color: #2e5cff;
+  text-decoration: underline;
+  transition: color .2s ease;
+}
+
+.futuristic-link:hover {
+  color: #5616c4;
+}
+
+.futuristic-link:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 6px;
+}
+
+/* Button with smoothly-animated gradient */
+.btn {
+  --_from: var(--btn-from);
+  --_to: var(--btn-to);
+  display: inline-block;
+  background: linear-gradient(90deg, var(--_from) 0%, var(--_to) 100%);
+  color: #fff;
+  padding: .8em 2em;
+  border: none;
+  border-radius: 2em;
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-decoration: none;
+  box-shadow: 0 0 8px #2e5cff88;
+  cursor: pointer;
+  transition: --btn-from .4s ease, --btn-to .4s ease, box-shadow .4s ease, transform .2s ease;
+}
+
+.btn:hover {
+  --btn-from: var(--btn-hover-from);
+  --btn-to: var(--btn-hover-to);
+  box-shadow: 0 0 16px #2e5cff99;
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 6px #2e5cff66 inset;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring), 0 0 16px #2e5cff99;
+}
+
+/* =========================
+   Futuristic Background
+   ========================= */
+/* Make the bg sit behind everything */
+.futuristic-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  /* viewport-scaled base gradient + grain + vignette */
+  --bg-grad: radial-gradient(140vw 120vh at 10% 10%, #070a12 20%, #0b1020 60%, #0a0f1c 100%);
+  --grain: radial-gradient(circle, #ffffff0c 0 1px, transparent 1px);
+  background-image:
+    var(--bg-grad),
+    var(--grain), var(--grain), var(--grain),
+    radial-gradient(140vw 120vh at 50% 120%, #000000cc, transparent 60%);
+  background-size: 100% 100%, 4px 4px, 3px 3px, 2px 2px, 100% 100%;
+  background-blend-mode: normal, lighten, lighten, lighten, multiply;
+}
+
+/* animated aurora glow */
+.futuristic-bg::before,
+.futuristic-bg::after {
+  content: "";
+  position: absolute;
+  inset: -20vmax;
+  /* overscan for 4K/ultrawide */
+  filter: blur(60px) saturate(120%);
+  mix-blend-mode: screen;
+  opacity: .75;
+}
+
+.futuristic-bg::before {
+  background: conic-gradient(from var(--angle, 0deg) at 30% 40%, #00e5ff33, #7cffea55, #9b5eff55, #00e5ff33);
+  animation: rotate 32s linear infinite, drift 18s ease-in-out infinite alternate;
+}
+
+.futuristic-bg::after {
+  background:
+    radial-gradient(45% 45% at 70% 60%, #ff6bd655 0%, transparent 60%),
+    radial-gradient(35% 35% at 20% 80%, #4ef0a655 0%, transparent 60%),
+    radial-gradient(60% 60% at 80% 20%, #6aa8ff44 0%, transparent 60%);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+@keyframes rotate {
+  to {
+    --angle: 360deg;
+  }
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1.05);
+  }
+
+  100% {
+    transform: translate3d(2%, 1%, 0) scale(1.1);
+  }
+}
+
+/* Optional: tasteful glass for your card */
+.card.futuristic-card {
+  background: color-mix(in oklab, #0b1020 75%, #ffffff 10%);
+  border: 1px solid #ffffff1a;
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+/* =========================
+   Navbar (GLOBAL)
+   ========================= */
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: -999px;
+}
+
+/* full-bleed wrapper that ignores any centered page container */
+.full-bleed {
+  position: sticky;
+  /* nice: stays at top */
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  z-index: 9999;
+}
+
+/* ensure the bar itself expands */
+.full-bleed .topbar {
+  width: 100%;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 9999;
+  padding: .5rem .75rem;
+  border-radius: .5rem;
+  background: #000;
+  color: #fff;
+  outline: 2px solid var(--accent);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+  height: var(--nav-h);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 0 var(--nav-padX);
+  border-bottom: 1px solid var(--nav-border);
+  background: var(--nav-bg);
+  backdrop-filter: blur(var(--nav-blur)) saturate(120%);
+  -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(120%);
+}
+
+.topbar.scrolled {
+  box-shadow: var(--nav-shadow);
+}
+
+.brand {
+  text-decoration: none;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+
+.nav-toggle {
+  margin-left: auto;
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nav-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.nav-toggle .bar {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #dbe7ff;
+  margin: 4px auto;
+}
+
+.topnav {
+  margin-left: auto;
+  display: flex;
+  gap: .25rem;
+  align-items: center;
+  max-width: var(--nav-maxw);
+}
+
+.topnav-link {
+  display: inline-block;
+  padding: .45rem .75rem;
+  border-radius: .6rem;
+  text-decoration: none;
+  color: #dbe7ff;
+  border: 1px solid transparent;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+}
+
+.topnav-link:hover {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.topnav-link.active {
+  color: #fff;
+  border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+  background: color-mix(in oklab, var(--accent) 24%, transparent);
+}
+
+/* =========================
+   Responsive Nav
+   ========================= */
+@media (max-width:860px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topnav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--nav-h);
+    display: grid;
+    gap: .5rem;
+    padding: .75rem var(--nav-padX) 1rem;
+    background: var(--nav-bg);
+    border-bottom: 1px solid var(--nav-border);
+    transform-origin: top center;
+    transform: scaleY(.98);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+  }
+
+  .topnav.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: scaleY(1);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+
+  .topnav-link {
+    padding: .6rem .75rem;
+  }
+}
+
+/* =========================
+   Footer
+   ========================= */
+footer {
+  margin-top: 2em;
+  font-size: .95em;
+  color: #888;
+  letter-spacing: 1px;
+}
+
+/* =========================
+   Project media
+   ========================= */
+.project-figure {
+  margin: 0 0 .75rem;
+}
+
+.project-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+  aspect-ratio: 16/9;
+  object-fit: cover;
+}
+
+/* =========================
+   Small screens tweaks
+   ========================= */
+@media (max-width:480px) {
+  .futuristic-card {
+    margin: 6vh 1rem;
+    padding: 2rem 1.25rem 1.5rem;
+  }
+
+  .glow {
+    font-size: 1.9rem;
+  }
+}
+
+/* =========================
+   Accessibility & Motion
+   ========================= */
+:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

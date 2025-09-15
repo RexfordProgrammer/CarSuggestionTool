@@ -1,23 +1,16 @@
 <!doctype html>
-<html>
+<html lang="en">
+
 <body>
-<h1>Car Finder Sandbox</h1>
-<textarea id="log" rows="12" cols="80" readonly></textarea><br/>
-<input id="msg" placeholder="Type a preference…" />
-<button id="send">Send</button>
-<script>
-const WS_URL = (location.search.includes('local'))
-? 'ws://localhost:3001'
-: 'wss://YOUR-API-GW.execute-api.REGION.amazonaws.com/dev';
-const token = 'dev-token'; // replace with real JWT when wired
-const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
-const log = (s) => document.getElementById('log').value += s + '\n';
-ws.onopen = () => log('connected');
-ws.onmessage = (e) => log(e.data);
-document.getElementById('send').onclick = () => {
-const text = document.getElementById('msg').value;
-ws.send(JSON.stringify({ action:'CHAT', text }));
-};
-</script>
+  <main class="container" id="app">
+    <!-- content injected by main.ts -->
+  </main>
+
+  <footer class="container">
+    <small>© <span id="year"></span> Rexford Dorchester</small>
+  </footer>
+
+  <script type="module" src="/src/pages/home.tsx"></script>
 </body>
+
 </html>

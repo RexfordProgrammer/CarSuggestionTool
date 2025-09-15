@@ -574,3 +574,11 @@ footer {
     transition: none !important;
   }
 }
+
+.chat-window {
+  height: 400px;         /* or flex-grow for full height */
+  overflow-y: auto;      /* enables scrolling */
+  padding: 1rem;
+  background: #514c88;
+  border-radius: 0.75rem;
+}

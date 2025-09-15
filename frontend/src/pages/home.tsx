@@ -71,23 +71,22 @@ function App() {
     setError(null);
 
     try {
-      // Swap this for your real endpoint (behind API Gateway / Load Balancer)
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password })
-      });
+    //   const res = await fetch("/api/login", {
+    //     method: "POST",
+    //     headers: { "Content-Type": "application/json" },
+    //     body: JSON.stringify({ email: email.trim(), password })
+    //   });
 
-      if (!res.ok) {
-        const msg = (await res.text()) || "Login failed";
-        throw new Error(msg);
-      }
+    //   if (!res.ok) {
+    //     const msg = (await res.text()) || "Login failed";
+    //     throw new Error(msg);
+    //   }
 
-      const data = (await res.json()) as LoginResponse;
-      saveSession(data.token, remember);
+    //   const data = (await res.json()) as LoginResponse;
+    //   saveSession(data.token, remember);
 
       // Navigate to the tool after successful login
-      window.location.assign("/car");
+      window.location.assign("/Chatbot/");
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong. Please try again.");
     } finally {

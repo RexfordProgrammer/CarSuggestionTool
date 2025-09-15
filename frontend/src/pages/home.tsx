@@ -107,6 +107,7 @@ function App() {
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div>
             <label htmlFor="email" className="sr-only">Email</label>
+            <br></br>
             <input
               id="email"
               ref={emailInputRef}
@@ -143,7 +144,7 @@ function App() {
               />
               <button
                 type="button"
-                className="icon-btn absolute right-2 top-1/2 -translate-y-1/2"
+                className="btn absolute right-2 top-1/2 -translate-y-1/2"
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -184,6 +185,7 @@ function App() {
         <p className="intro">
           New here? <a className="futuristic-link" href="/signup">Create an account</a> to start your car search.
         </p>
+        
       </section>
 
       {/* Accessible region for async form status */}

@@ -514,6 +514,53 @@ footer {
   }
 }
 
+/* In style.css, near your other globals */
+
+/* Inputs */
+.input {
+  background: rgba(20,20,40,0.8);
+  border: 1px solid var(--accent-glow);
+  border-radius: 0.5rem;
+  color: var(--text);
+  padding: 0.6rem 0.8rem;
+  font-size: 1rem;
+  width: 100%;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0.5rem var(--accent-glow);
+}
+
+/* Buttons */
+.btn {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s ease;
+}
+.btn:hover { background: var(--accent-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Help/error text */
+.help-text {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+.alert.error {
+  background: rgba(255,0,60,0.15);
+  border: 1px solid red;
+  color: #f88;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+
+
 /* =========================
    Accessibility & Motion
    ========================= */

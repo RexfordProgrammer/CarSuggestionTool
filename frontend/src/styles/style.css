@@ -2,32 +2,37 @@
    Theme & Resets
    ========================= */
 :root {
-  --bg: #000000;
-  --fg: #ebf0f7;
-  --muted: #a7b4c2;
-  --card: #131a22;
+  /* Palette mapped from PALETTE */
+  --base: #bbd8ed;
+  --surface: #cde3f3;
+  --surface-alt: #e1e9f4;
+  --white: #ffffff;
+  --accent: #832b30;
 
-  /* Accent used for links + navbar */
-  --accent: #6aa8ff;
+  /* Backwards-compatible tokens used in this stylesheet */
+  --bg: var(--surface);
+  --fg: var(--accent);
+  --muted: #7f5b5b;
+  --card: var(--surface-alt);
 
-  /* Button gradient stops (animated via @property) */
-  --btn-from: #232b5d;
-  --btn-to: #2216c4;
-  --btn-hover-from: #2e5cff;
-  --btn-hover-to: #2216c4;
+  /* Button gradient stops (animated via @property) — use accent + base for nice contrast */
+  --btn-from: #9aaec0; /* lightened base */
+  --btn-to: var(--accent);
+  --btn-hover-from: #b5d6ee;
+  --btn-hover-to: var(--accent);
 
   /* Shadows & radii */
   --radius: 1.5rem;
-  --shadow-lg: 0 6px 20px rgba(0, 0, 0, .25);
-  --ring: 0 0 0 3px #2e5cff66;
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, .12);
+  --ring: 0 0 0 3px rgba(131,43,48,.18);
 
   /* Navbar */
   --nav-h: 64px;
   --nav-maxw: 1100px;
   --nav-padX: clamp(12px, 4vw, 28px);
-  --nav-bg: rgba(11, 16, 32, .78);
-  --nav-border: #ffffff1a;
-  --nav-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  --nav-bg: rgba(255,255,255,0.8);
+  --nav-border: rgba(0,0,0,0.08);
+  --nav-shadow: 0 8px 24px rgba(0, 0, 0, .08);
   --nav-blur: 10px;
 }
 
@@ -144,7 +149,7 @@ nav a {
   max-width: 420px;
   background: rgba(15, 18, 34, .97);
   border-radius: var(--radius);
-  box-shadow: 0 0 32px #2e5cff44, 0 0 8px #3a3ded33;
+  box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
   padding: 2.5rem 2rem 2rem;
   text-align: center;
   color: #e3e6f3;
@@ -193,13 +198,13 @@ nav a {
 }
 
 .futuristic-link {
-  color: #2e5cff;
+  color: #3d63efff;
   text-decoration: underline;
   transition: color .2s ease;
 }
 
 .futuristic-link:hover {
-  color: #5616c4;
+  color: #ffffffff;
 }
 
 .futuristic-link:focus-visible {
@@ -277,15 +282,15 @@ nav a {
 }
 
 .futuristic-bg::before {
-  background: conic-gradient(from var(--angle, 0deg) at 30% 40%, #00e5ff33, #7cffea55, #9b5eff55, #00e5ff33);
+  background: conic-gradient(from var(--angle, 0deg) at 30% 40%, #bbd8ed, #ffffff55, #832b30, #bbd8ed);
   animation: rotate 32s linear infinite, drift 18s ease-in-out infinite alternate;
 }
 
 .futuristic-bg::after {
   background:
-    radial-gradient(45% 45% at 70% 60%, #ff6bd655 0%, transparent 60%),
-    radial-gradient(35% 35% at 20% 80%, #4ef0a655 0%, transparent 60%),
-    radial-gradient(60% 60% at 80% 20%, #6aa8ff44 0%, transparent 60%);
+    radial-gradient(45% 45% at 70% 60%, #bbd8ed 0%, transparent 60%),
+    radial-gradient(35% 35% at 20% 80%, #832b30 0%, transparent 60%),
+    radial-gradient(60% 60% at 80% 20%, #e1e9f4 0%, transparent 60%);
   animation: drift 26s ease-in-out infinite alternate;
 }
 
@@ -307,7 +312,7 @@ nav a {
 
 /* Optional: tasteful glass for your card */
 .card.futuristic-card {
-  background: color-mix(in oklab, #0b1020 75%, #ffffff 10%);
+  background: color-mix(in oklab, #2b050cff 75%, #ffffff 10%);
   border: 1px solid #ffffff1a;
   backdrop-filter: blur(10px) saturate(120%);
   -webkit-backdrop-filter: blur(10px) saturate(120%);
@@ -518,7 +523,7 @@ footer {
 
 /* Inputs */
 .input {
-  background: rgba(20,20,40,0.8);
+  background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--accent-glow);
   border-radius: 0.5rem;
   color: var(--text);
@@ -579,6 +584,6 @@ footer {
   height: 400px;         /* or flex-grow for full height */
   overflow-y: auto;      /* enables scrolling */
   padding: 1rem;
-  background: #514c88;
+  background: #ffffffff;
   border-radius: 0.75rem;
 }

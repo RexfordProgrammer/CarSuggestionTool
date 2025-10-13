@@ -10,7 +10,7 @@ function App() {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const wsUrl = "wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1/";
+    const wsUrl = "https://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1";
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 

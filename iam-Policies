@@ -1,7 +1,0 @@
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    { "Effect": "Allow", "Action": ["dynamodb:PutItem","dynamodb:GetItem","dynamodb:DeleteItem","dynamodb:UpdateItem"], "Resource": "arn:aws:dynamodb:*:*:table/CAR_FINDER_TABLE" },
-    { "Effect": "Allow", "Action": ["execute-api:ManageConnections"], "Resource": "arn:aws:execute-api:*:*:*/@connections/*" }
-  ]
-}

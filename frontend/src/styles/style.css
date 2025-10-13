@@ -152,7 +152,7 @@ nav a {
   box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
   padding: 2.5rem 2rem 2rem;
   text-align: center;
-  color: #e3e6f3;
+  color: #000000ff;
   border: 1.5px solid #2e5cff;
   backdrop-filter: blur(4px);
 }

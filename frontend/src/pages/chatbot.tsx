@@ -10,7 +10,7 @@ function App() {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const wsUrl = "https://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1";
+    const wsUrl = "wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1";
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
@@ -20,6 +20,7 @@ function App() {
     };
 
     socket.onmessage = (event) => {
+      console.log(event.data);
       setMessages((prev) => [...prev, "📩 " + event.data]);
     };
 
@@ -40,12 +41,16 @@ function App() {
 
   // --- Send message handler ---
   const sendMessage = () => {
+    console.log("sending message");
     if (socketRef.current && connected && input.trim() !== "") {
+          console.log("stringifying payload");
       const payload = JSON.stringify({
         action: "sendMessage",
         text: input.trim(),
       });
+      console.log(payload);
       socketRef.current.send(payload);
+
       setMessages((prev) => [...prev, "➡️ " + input.trim()]);
       setInput("");
     }

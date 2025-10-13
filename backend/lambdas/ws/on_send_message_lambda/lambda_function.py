@@ -1,6 +1,5 @@
 import boto3
 import json
-import os
 
 def lambda_handler(event, context):
     print("Full event:", json.dumps(event))
@@ -17,22 +16,25 @@ def lambda_handler(event, context):
 
     message = body.get("text", "(no text)")
 
-    # Construct the Management API client for *this stage/domain*
+    # Management API client
     apigw = boto3.client(
         "apigatewaymanagementapi",
         endpoint_url=f"https://{domain}/{stage}"
     )
 
+    payload = {
+        "type": "echo",
+        "reply": f"You said: {message}"
+    }
+
     try:
-        response = apigw.post_to_connection(
+        print(f"Sending payload: {payload}")
+        apigw.post_to_connection(
             ConnectionId=connection_id,
-            Data=json.dumps({
-                "type": "echo",
-                "reply": f"You said: {message}"
-            }).encode("utf-8")
+            Data=json.dumps(payload).encode("utf-8")
         )
-        print("PostToConnection response:", response)
+        print("✅ Sent successfully")
     except Exception as e:
-        print("Error posting to connection:", e)
+        print("❌ Error posting to connection:", str(e))
 
     return {"statusCode": 200}

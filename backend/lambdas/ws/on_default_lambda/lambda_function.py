@@ -2,6 +2,8 @@ import boto3
 import json
 
 def lambda_handler(event, context):
+    # Test for cli upload
+
     print("Event:", json.dumps(event))
 
     connection_id = event["requestContext"]["connectionId"]

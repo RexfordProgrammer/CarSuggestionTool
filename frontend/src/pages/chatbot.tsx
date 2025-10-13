@@ -1,29 +1,95 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@/styles/style.css";
 
-// --- Component ---
 function App() {
+  const [messages, setMessages] = useState<string[]>([]);
+  const [input, setInput] = useState("");
+  const [connected, setConnected] = useState(false);
+
+  const socketRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const wsUrl = "wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1/";
+    const socket = new WebSocket(wsUrl);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      setConnected(true);
+      setMessages((prev) => [...prev, "✅ Connected"]);
+    };
+
+    socket.onmessage = (event) => {
+      setMessages((prev) => [...prev, "📩 " + event.data]);
+    };
+
+    socket.onclose = () => {
+      setConnected(false);
+      setMessages((prev) => [...prev, "❌ Disconnected"]);
+    };
+
+    socket.onerror = (err) => {
+      setMessages((prev) => [...prev, "⚠️ WebSocket error"]);
+      console.error("WebSocket error:", err);
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, []);
+
+  // --- Send message handler ---
+  const sendMessage = () => {
+    if (socketRef.current && connected && input.trim() !== "") {
+      const payload = JSON.stringify({
+        action: "sendMessage",
+        text: input.trim(),
+      });
+      socketRef.current.send(payload);
+      setMessages((prev) => [...prev, "➡️ " + input.trim()]);
+      setInput("");
+    }
+  };
 
   return (
     <>
-      {/* Background layer (uses your existing CSS theme) */}
+      {/* Background */}
       <div className="futuristic-bg" aria-hidden="true" />
-
-      <section>
-
-      </section>
 
       <section className="card futuristic-card max-w-md mx-auto">
         <h1 className="glow">Car Suggestion Tool</h1>
-        <div className="chat-window" >
-</div>
-          <input className="input w-full" type="text"></input>
-          <button className="btn w-full" type="submit">
-            {/* {submitting ? "Signing in…" : "Sign In"} */"Submit"}
+
+        {/* Chat window */}
+        <div className="chat-window border rounded p-2 h-64 overflow-y-auto bg-black/30 text-green-200">
+          {messages.map((msg, i) => (
+            <div key={i} className="mb-1">
+              {msg}
+            </div>
+          ))}
+        </div>
+
+        {/* Input + send button */}
+        <div className="flex mt-2 gap-2">
+          <input
+            className="input flex-1"
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            placeholder={connected ? "Type your message…" : "Not connected"}
+            disabled={!connected}
+          />
+          <button
+            className="btn"
+            type="button"
+            onClick={sendMessage}
+            disabled={!connected}
+          >
+            Send
           </button>
+        </div>
+
         <div className="divider" role="separator" aria-hidden="true" />
-        
       </section>
     </>
   );

@@ -1,1 +1,3 @@
 node_modules
+backend/lambdas/ws/on_disconnect_lambda/function.zip
+backend/lambdas/ws/on_connect_lambda/function.zip

@@ -38,6 +38,5 @@ aws lambda update-function-code `
   --function-name $Function `
   --zip-file fileb://$ZipFile `
   --region $Region `
-  --profile $Profile
 
 Write-Host "==> Done!"

@@ -5,13 +5,20 @@ bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('messages')
 
+def _get_session_messages(connection_id):
+    response = table.get_item(Key={'connectionId': connection_id})
+    item = response.get('Item')
+    if not item:
+        return []
+    return item.get('messages', [])
 
-def _get_model_response(user_message):
+
+def _get_model_response(connection_id):
     try:
+        messages_for_payload = _get_session_messages(connection_id)
+        
         payload = {
-            "messages": [
-                {"role": "user", "content": user_message}
-            ],
+            "messages": messages_for_payload,
             "temperature": 0.7
         }
         
@@ -36,35 +43,28 @@ def _get_model_response(user_message):
     except Exception as e:
         return f"(error from bedrock: {e})"
 
-def _save_message_in_session (usermessage, connection_id):
-    usermessage = "User: "+usermessage
-    
+def _save_message_in_session(usermessage, connection_id):
+    entry = {"role": "user", "content": usermessage}
     table.update_item(
-    Key={'connectionId': connection_id},
-    UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
-    ExpressionAttributeValues={
-        ':new_message': [usermessage],
-        ':empty_list': []
-    }
-)
+        Key={'connectionId': connection_id},
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
+        ExpressionAttributeValues={
+            ':new_message': [entry],
+            ':empty_list': []
+        }
+    )
 
-def _save_response_in_session (botmessage, connection_id):
-    botmessage = "Bot: "+ botmessage
+def _save_response_in_session(botmessage, connection_id):
+    entry = {"role": "assistant", "content": botmessage}
     table.update_item(
-    Key={'connectionId': connection_id},
-    UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
-    ExpressionAttributeValues={
-        ':new_message': [botmessage],
-        ':empty_list': []
-    }
-)
+        Key={'connectionId': connection_id},
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
+        ExpressionAttributeValues={
+            ':new_message': [entry],
+            ':empty_list': []
+        }
+    )
 
-def _get_session_messages(connection_id):
-    response = table.get_item(Key={'connectionId': connection_id})
-    item = response.get('Item')
-    if not item:
-        return []
-    return item.get('messages', [])
 
 
 
@@ -84,12 +84,15 @@ def lambda_handler(event, context):
         body = {}
 
     user_message = body.get("text", "(no text)")
-    _save_message_in_session(user_message, event['requestContext']['connectionId'])
+    _save_message_in_session(user_message, connection_id)
 
     bedrock_reply = "(no output)"
-    bedrock_reply = _get_model_response(user_message)
+    bedrock_reply = _get_model_response(connection_id)
+    
+    _save_response_in_session(bedrock_reply, connection_id)
+    
+    print ("Chat History: ", _get_session_messages(connection_id))
 
-    _save_response_in_session(bedrock_reply, event['requestContext']['connectionId'])
     apigw = boto3.client(
         "apigatewaymanagementapi",
         endpoint_url=f"https://{domain}/{stage}"

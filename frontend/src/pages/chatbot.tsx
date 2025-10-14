@@ -22,20 +22,22 @@ useEffect(() => {
 
   socket.onopen = () => {
     setConnected(true);
-    setMessages((prev) => [...prev, "✅ Connected"]);
+    setMessages((prev) => [...prev, "Connected"]);
   };
 
   socket.onmessage = (event) => {
-    setMessages((prev) => [...prev, "📩 " + event.data]);
+    //     payload = {"type": "bedrock_reply", "reply": bedrock_reply}
+    const reponsebody = JSON.parse(event.data)
+    setMessages((prev) => [...prev, "Bot: " + reponsebody.reply]);
   };
 
   socket.onclose = () => {
     setConnected(false);
-    setMessages((prev) => [...prev, "❌ Disconnected"]);
+    setMessages((prev) => [...prev, "....Disconnected"]);
   };
 
   socket.onerror = (err) => {
-    setMessages((prev) => [...prev, "⚠️ WebSocket error"]);
+    setMessages((prev) => [...prev, "...WebSocket error"]);
     console.error("WebSocket error:", err);
   };
 
@@ -57,7 +59,7 @@ useEffect(() => {
       console.log(payload);
       socketRef.current.send(payload);
 
-      setMessages((prev) => [...prev, "➡️ " + input.trim()]);
+      setMessages((prev) => [...prev, "User: " + input.trim()]);
       setInput("");
     }
   };
@@ -71,7 +73,7 @@ useEffect(() => {
         <h1 className="glow">Car Suggestion Tool</h1>
 
         {/* Chat window */}
-        <div className="chat-window border rounded p-2 h-64 overflow-y-auto bg-black/30 text-black">
+        <div className="chat-window border rounded p-2 h-64 overflow-y-auto text-left bg-black/30 text-black">
           {messages.map((msg, i) => (
             <div key={i} className="mb-1">
               {msg}

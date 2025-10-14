@@ -6,7 +6,7 @@ $LambdaFile = Join-Path $PSScriptRoot "lambda_function.py"
 $PackageDir = Join-Path $PSScriptRoot "package"
 $ZipFile    = Join-Path $PSScriptRoot "function.zip"
 
-$Function   = "on_connect"
+$Function   = "on_login"
 $Region     = "us-east-1"
 $Profile1    = "Fall2025-CS410-Matrix-661364632619"
 

@@ -5,12 +5,9 @@ import "@/styles/style.css";
 // --- Types ---
 interface LoginResponse {
   token: string;
-  user: { id: string; email: string; name?: string };
 }
 
 // --- Helpers ---
-const EMAIL_RE = /^(?:[^\s@]+)@(?:[^\s@]+)\.(?:[^\s@]{2,})$/i;
-
 function saveSession(token: string, remember: boolean) {
   try {
     if (remember) {
@@ -19,7 +16,7 @@ function saveSession(token: string, remember: boolean) {
       sessionStorage.setItem("auth_token", token);
     }
   } catch {
-    // storage might be unavailable (private mode, etc.) — ignore
+    // ignore storage issues (incognito, etc.)
   }
 }
 
@@ -48,6 +45,7 @@ function App() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
   const emailInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -55,37 +53,38 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Persist email only if remember is on
     if (remember) setSavedEmail(email || null);
   }, [email, remember]);
 
-  const emailValid = useMemo(() => EMAIL_RE.test(email.trim()), [email]);
-  const passwordValid = useMemo(() => password.trim().length >= 6, [password]);
-  const formValid = emailValid && passwordValid && !submitting;
+  // const emailValid = useMemo(() => /\S+@\S+\.\S+/.test(email.trim()), [email]);
+  // const passwordValid = useMemo(() => password.trim().length >= 6, [password]);
+  // const formValid = emailValid && passwordValid && !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!formValid) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
-    //   const res = await fetch("/api/login", {
-    //     method: "POST",
-    //     headers: { "Content-Type": "application/json" },
-    //     body: JSON.stringify({ email: email.trim(), password })
-    //   });
+      const res = await fetch(
+        "https://p5r1m9lr8b.execute-api.us-east-1.amazonaws.com/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: email.trim(), password }),
+        }
+      );
 
-    //   if (!res.ok) {
-    //     const msg = (await res.text()) || "Login failed";
-    //     throw new Error(msg);
-    //   }
+      if (!res.ok) {
+        const msg = (await res.text()) || "Login failed";
+        throw new Error(msg);
+      }
 
-    //   const data = (await res.json()) as LoginResponse;
-    //   saveSession(data.token, remember);
+      const data = (await res.json()) as LoginResponse;
+      saveSession(data.token, remember);
 
-      // Navigate to the tool after successful login
+      // Redirect to chatbot
       window.location.assign("/Chatbot/");
     } catch (err: any) {
       setError(err?.message ?? "Something went wrong. Please try again.");
@@ -96,48 +95,48 @@ function App() {
 
   return (
     <>
-      {/* Background layer (uses your existing CSS theme) */}
       <div className="futuristic-bg" aria-hidden="true" />
 
-      <section className="card futuristic-card max-w-md mx-auto">
+      <section className="card login-card max-w-md mx-auto">
         <h1 className="glow">Car Suggestion Tool</h1>
         <h2 className="subtitle">Sign in to continue</h2>
 
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+          {/* Email */}
+          <label htmlFor="email" className="sr-only">
+            Email
+          </label>
           <div>
-            <label htmlFor="email" className="sr-only">Email</label>
-            <br></br>
             <input
               id="email"
               ref={emailInputRef}
               className="input w-full"
               type="email"
               autoComplete="email"
-              placeholder="you@example.com"
+              placeholder="Email"
+              style={{ color: "#000" }}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              aria-invalid={email.length > 0 && !emailValid}
-              aria-describedby="email-help"
               required
             />
-            <p id="email-help" className="help-text">
-              {email.length > 0 && !emailValid ? "Enter a valid email" : ""}
-            </p>
           </div>
 
           <div>
-            <label htmlFor="password" className="sr-only">Password</label>
+            <label htmlFor="password" className="sr-only">
+              Password
+            </label>
+
             <div className="relative">
               <input
                 id="password"
                 className="input w-full pr-10"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
-                placeholder="Password (min 6 characters)"
+                placeholder="Password"
                 value={password}
+                style={{ color: "#000" }}
                 onChange={(e) => setPassword(e.target.value)}
-                aria-invalid={password.length > 0 && !passwordValid}
-                aria-describedby="password-help"
+                aria-invalid={password.length > 0}
                 required
                 minLength={6}
               />
@@ -150,13 +149,14 @@ function App() {
                 {showPassword ? "🙈" : "👁️"}
               </button>
             </div>
-            <p id="password-help" className="help-text">
-              {password.length > 0 && !passwordValid ? "Use at least 6 characters" : ""}
+            <p className="help-text">
+              {password.length > 0 ? "Use at least 6 characters" : ""}
             </p>
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="checkbox inline-flex items-center gap-2">
+          {/* Remember me + Forgot password */}
+          <div className="flex items-center gap-6 bg-red-500">
+            <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={remember}
@@ -164,30 +164,35 @@ function App() {
               />
               <span>Remember me</span>
             </label>
-
-            <a className="futuristic-link text-sm" href="/forgot">Forgot password?</a>
+            <a className="futuristic-link text-sm" href="/forgot">
+              Forgot password?
+            </a>
           </div>
 
+          {/* Error */}
           {error && (
             <div className="alert error" role="alert" aria-live="assertive">
               {error}
             </div>
           )}
 
-          <button className="btn w-full" type="submit" disabled={!formValid}>
+          {/* Submit */}
+          <button className="btn w-full" type="submit">
             {submitting ? "Signing in…" : "Sign In"}
           </button>
         </form>
 
-        <div className="divider" role="separator" aria-hidden="true" />
+        <div className="divider" role="separator" />
 
         <p className="intro">
-          New here? <a className="futuristic-link" href="/signup">Create an account</a> to start your car search.
+          New here?{" "}
+          <a className="futuristic-link" href="/signup">
+            Create an account
+          </a>{" "}
+          to start your car search.
         </p>
-        
       </section>
 
-      {/* Accessible region for async form status */}
       <p className="sr-only" role="status" aria-live="polite">
         {submitting ? "Submitting login form" : ""}
       </p>
@@ -197,5 +202,4 @@ function App() {
 
 // Mount
 createRoot(document.getElementById("app")!).render(<App />);
-
 export default App;

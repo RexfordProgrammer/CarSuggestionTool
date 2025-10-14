@@ -8,36 +8,42 @@ function App() {
   const [connected, setConnected] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
+useEffect(() => {
+  const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
+  if (!token) {
+    console.error("No auth token found");
+    return;
+  }
 
-  useEffect(() => {
-    const wsUrl = "wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1";
-    const socket = new WebSocket(wsUrl);
-    socketRef.current = socket;
+  // Attach token as query param
+  const wsUrl = `wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1?token=${encodeURIComponent(token)}`;
+  const socket = new WebSocket(wsUrl);
+  socketRef.current = socket;
 
-    socket.onopen = () => {
-      setConnected(true);
-      setMessages((prev) => [...prev, "✅ Connected"]);
-    };
+  socket.onopen = () => {
+    setConnected(true);
+    setMessages((prev) => [...prev, "✅ Connected"]);
+  };
 
-    socket.onmessage = (event) => {
-      console.log(event.data);
-      setMessages((prev) => [...prev, "📩 " + event.data]);
-    };
+  socket.onmessage = (event) => {
+    setMessages((prev) => [...prev, "📩 " + event.data]);
+  };
 
-    socket.onclose = () => {
-      setConnected(false);
-      setMessages((prev) => [...prev, "❌ Disconnected"]);
-    };
+  socket.onclose = () => {
+    setConnected(false);
+    setMessages((prev) => [...prev, "❌ Disconnected"]);
+  };
 
-    socket.onerror = (err) => {
-      setMessages((prev) => [...prev, "⚠️ WebSocket error"]);
-      console.error("WebSocket error:", err);
-    };
+  socket.onerror = (err) => {
+    setMessages((prev) => [...prev, "⚠️ WebSocket error"]);
+    console.error("WebSocket error:", err);
+  };
 
-    return () => {
-      socket.close();
-    };
-  }, []);
+  return () => {
+    socket.close();
+  };
+}, []);
+
 
   // --- Send message handler ---
   const sendMessage = () => {

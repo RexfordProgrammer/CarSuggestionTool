@@ -157,6 +157,21 @@ nav a {
   backdrop-filter: blur(4px);
 }
 
+.login-card {
+  position: relative;
+  z-index: 1;
+  margin: 8vh auto;
+  max-width: 420px;
+  background: rgba(92, 27, 38, 0.97);
+  border-radius: var(--radius);
+  box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+  color: #ffffffff;
+  border: 1.5px solid #000000ff;
+  backdrop-filter: blur(4px);
+}
+
 /* Headings / text in the hero card */
 .glow {
   font-size: 2.2rem;

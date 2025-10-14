@@ -2,6 +2,73 @@ import boto3
 import json
 
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('messages')
+
+
+def _get_model_response(user_message):
+    try:
+        payload = {
+            "messages": [
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.7
+        }
+        
+        model_id = "ai21.jamba-1-5-mini-v1:0"
+        response = bedrock.invoke_model(
+            modelId=model_id,
+            body=json.dumps(payload)
+        )
+
+        result = json.loads(response["body"].read())
+
+        reply = None
+
+        if reply is None:
+            try:
+                reply = result["choices"][0]["message"]["content"]
+            except Exception:
+                pass
+
+        return (reply or "(no output)").strip()
+
+    except Exception as e:
+        return f"(error from bedrock: {e})"
+
+def _save_message_in_session (usermessage, connection_id):
+    usermessage = "User: "+usermessage
+    
+    table.update_item(
+    Key={'connectionId': connection_id},
+    UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
+    ExpressionAttributeValues={
+        ':new_message': [usermessage],
+        ':empty_list': []
+    }
+)
+
+def _save_response_in_session (botmessage, connection_id):
+    botmessage = "Bot: "+ botmessage
+    table.update_item(
+    Key={'connectionId': connection_id},
+    UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
+    ExpressionAttributeValues={
+        ':new_message': [botmessage],
+        ':empty_list': []
+    }
+)
+
+def _get_session_messages(connection_id):
+    response = table.get_item(Key={'connectionId': connection_id})
+    item = response.get('Item')
+    if not item:
+        return []
+    return item.get('messages', [])
+
+
+
+
 
 def lambda_handler(event, context):
     print("Full event:", json.dumps(event))
@@ -17,64 +84,12 @@ def lambda_handler(event, context):
         body = {}
 
     user_message = body.get("text", "(no text)")
+    _save_message_in_session(user_message, event['requestContext']['connectionId'])
 
-    # --- Call Bedrock: AI21 Jamba 1.5 Mini (chat schema) ---
-    model_id = "ai21.jamba-1-5-mini-v1:0"
     bedrock_reply = "(no output)"
-    try:
-        # IMPORTANT: content must be a STRING for this model
-        payload = {
-            "messages": [
-                {"role": "user", "content": user_message}
-            ],
-            # keep top-level params minimal; this model rejects some extras
-            "temperature": 0.7
-            # You can add "topP": 0.9 later if needed
-        }
+    bedrock_reply = _get_model_response(user_message)
 
-        response = bedrock.invoke_model(
-            modelId=model_id,
-            body=json.dumps(payload)
-        )
-
-        result = json.loads(response["body"].read())
-        # Debug once to see exact shape (comment out after verifying)
-        print("Raw Bedrock result:", json.dumps(result)[:2000])
-
-        # --- Robust extraction across known AI21/Jamba shapes ---
-        reply = None
-
-        # Newer Jamba chat-style (common on Bedrock):
-        try:
-            reply = result["output"]["message"]["content"][0]["text"]
-        except Exception:
-            pass
-
-        # Alternate AI21 completion-style:
-        if reply is None:
-            try:
-                reply = result["completions"][0]["data"]["text"]
-            except Exception:
-                pass
-
-        # OpenAI-like fallback:
-        if reply is None:
-            try:
-                reply = result["choices"][0]["message"]["content"]
-            except Exception:
-                pass
-
-        # Simple fields fallback:
-        if reply is None:
-            reply = result.get("outputText") or result.get("result")
-
-        bedrock_reply = (reply or "(no output)").strip()
-
-    except Exception as e:
-        print("❌ Bedrock call failed:", str(e))
-        bedrock_reply = f"(error from bedrock: {e})"
-
-    # --- Send response via WebSocket ---
+    _save_response_in_session(bedrock_reply, event['requestContext']['connectionId'])
     apigw = boto3.client(
         "apigatewaymanagementapi",
         endpoint_url=f"https://{domain}/{stage}"
@@ -87,8 +102,8 @@ def lambda_handler(event, context):
             ConnectionId=connection_id,
             Data=json.dumps(payload).encode("utf-8")
         )
-        print("✅ Sent successfully")
+        print("Sent successfully")
     except Exception as e:
-        print("❌ Error posting to connection:", str(e))
+        print("Error posting to connection:", str(e))
 
     return {"statusCode": 200}

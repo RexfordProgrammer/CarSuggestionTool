@@ -3,3 +3,4 @@ backend/lambdas/ws/on_disconnect_lambda/function.zip
 backend/lambdas/ws/on_connect_lambda/function.zip
 backend/.env
 *.pyc
+backend/lambdas/ws/on_send_message_lambda/function.zip

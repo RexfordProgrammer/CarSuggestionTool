@@ -11,7 +11,7 @@ def get_session_messages(connection_id):
         return []
     return item.get('messages', [])
 
-def save_message_in_session(usermessage, connection_id):
+def save_user_message(usermessage, connection_id):
     entry = {"role": "user", "content": usermessage}
     table.update_item(
         Key={'connectionId': connection_id},
@@ -22,8 +22,7 @@ def save_message_in_session(usermessage, connection_id):
         }
     )
 
-
-def save_response_in_session(botmessage, connection_id):
+def save_bot_response(botmessage, connection_id):
     entry = {"role": "assistant", "content": botmessage}
     table.update_item(
         Key={'connectionId': connection_id},

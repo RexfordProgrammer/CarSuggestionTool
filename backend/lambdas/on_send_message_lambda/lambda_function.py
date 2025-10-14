@@ -4,7 +4,7 @@
 
 import boto3
 import json
-from dynamo_db_helpers import get_session_messages, save_message_in_session
+from dynamo_db_helpers import get_session_messages, save_user_message
 from call_bedrock import get_model_response
 
 
@@ -22,12 +22,12 @@ def lambda_handler(event, context):
         body = {}
 
     user_message = body.get("text", "(no text)")
-    save_message_in_session(user_message, connection_id)
+    save_user_message(user_message, connection_id)
 
     bedrock_reply = "(no output)"
     bedrock_reply = get_model_response(connection_id)
     
-    save_message_in_session(bedrock_reply, connection_id)
+    save_user_message(bedrock_reply, connection_id)
     
     print ("Chat History: ", get_session_messages(connection_id))
 

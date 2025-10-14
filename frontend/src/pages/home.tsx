@@ -143,6 +143,10 @@ function App() {
               <button
                 type="button"
                 className="btn absolute right-2 top-1/2 -translate-y-1/2"
+                style={{
+                  padding: "0.25rem 0.4rem", // smaller padding
+                  fontSize: "0.8rem", // smaller icon/text
+                }}
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >

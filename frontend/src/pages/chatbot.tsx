@@ -71,7 +71,7 @@ useEffect(() => {
         <h1 className="glow">Car Suggestion Tool</h1>
 
         {/* Chat window */}
-        <div className="chat-window border rounded p-2 h-64 overflow-y-auto bg-black/30 text-green-200">
+        <div className="chat-window border rounded p-2 h-64 overflow-y-auto bg-black/30 text-black">
           {messages.map((msg, i) => (
             <div key={i} className="mb-1">
               {msg}

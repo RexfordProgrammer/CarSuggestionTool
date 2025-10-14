@@ -28,6 +28,7 @@ Write-Host "==> Uploading to AWS Lambda: $Function"
 aws lambda update-function-code `
   --function-name $Function `
   --zip-file fileb://$ZipFile `
-  --profile Fall2025-CS410-Matrix-661364632619 `
   --region $Region
 Write-Host "==> Done!"
+
+  # --profile Fall2025-CS410-Matrix-661364632619 `

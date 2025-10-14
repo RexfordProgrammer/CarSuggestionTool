@@ -1,13 +1,7 @@
 import boto3
 import json
-import os
-import requests
 
-def get_bedrock_api_key():
-    secrets = boto3.client("secretsmanager", region_name="us-east-1")
-    secret_value = secrets.get_secret_value(SecretId="bedrockkey")
-    # secret should be stored as {"BEDROCK_API_KEY": "actual-key"}
-    return json.loads(secret_value["SecretString"])["BEDROCK_API_KEY"]
+bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
 def lambda_handler(event, context):
     print("Full event:", json.dumps(event))
@@ -24,27 +18,58 @@ def lambda_handler(event, context):
 
     user_message = body.get("text", "(no text)")
 
-    # --- Call Bedrock with API Key ---
+    # --- Call Bedrock: AI21 Jamba 1.5 Mini (chat schema) ---
+    model_id = "ai21.jamba-1-5-mini-v1:0"
+    bedrock_reply = "(no output)"
     try:
-        api_key = get_bedrock_api_key()
-
-        url = "https://bedrock-runtime.us-east-1.amazonaws.com/model/meta.llama3-3-70b-instruct-v1:0/invoke"
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-
+        # IMPORTANT: content must be a STRING for this model
         payload = {
-            "inputText": user_message,
-            "parameters": {"max_gen_len": 256}
+            "messages": [
+                {"role": "user", "content": user_message}
+            ],
+            # keep top-level params minimal; this model rejects some extras
+            "temperature": 0.7
+            # You can add "topP": 0.9 later if needed
         }
 
-        r = requests.post(url, headers=headers, json=payload)
-        r.raise_for_status()
-        resp = r.json()
+        response = bedrock.invoke_model(
+            modelId=model_id,
+            body=json.dumps(payload)
+        )
 
-        bedrock_reply = resp.get("outputText", "(no output)")
+        result = json.loads(response["body"].read())
+        # Debug once to see exact shape (comment out after verifying)
+        print("Raw Bedrock result:", json.dumps(result)[:2000])
+
+        # --- Robust extraction across known AI21/Jamba shapes ---
+        reply = None
+
+        # Newer Jamba chat-style (common on Bedrock):
+        try:
+            reply = result["output"]["message"]["content"][0]["text"]
+        except Exception:
+            pass
+
+        # Alternate AI21 completion-style:
+        if reply is None:
+            try:
+                reply = result["completions"][0]["data"]["text"]
+            except Exception:
+                pass
+
+        # OpenAI-like fallback:
+        if reply is None:
+            try:
+                reply = result["choices"][0]["message"]["content"]
+            except Exception:
+                pass
+
+        # Simple fields fallback:
+        if reply is None:
+            reply = result.get("outputText") or result.get("result")
+
+        bedrock_reply = (reply or "(no output)").strip()
+
     except Exception as e:
         print("❌ Bedrock call failed:", str(e))
         bedrock_reply = f"(error from bedrock: {e})"

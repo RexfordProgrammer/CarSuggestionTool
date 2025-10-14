@@ -95,7 +95,7 @@ function App() {
 
   return (
     <>
-      <div className="futuristic-bg" aria-hidden="true" />
+      <div className="bg-red-500 futuristic-bg " aria-hidden="true" />
 
       <section className="card login-card max-w-md mx-auto">
         <h1 className="glow">Car Suggestion Tool</h1>
@@ -155,7 +155,7 @@ function App() {
           </div>
 
           {/* Remember me + Forgot password */}
-          <div className="flex items-center gap-6 bg-red-500">
+          <div className="flex items-center gap-6 ">
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"

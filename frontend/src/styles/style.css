@@ -1,6 +1,5 @@
-/* =========================
-   Theme & Resets
-   ========================= */
+@import "tailwindcss";
+
 :root {
   /* Palette mapped from PALETTE */
   --base: #bbd8ed;
@@ -35,6 +34,7 @@
   --nav-shadow: 0 8px 24px rgba(0, 0, 0, .08);
   --nav-blur: 10px;
 }
+
 
 /* Animate custom properties (for smooth gradient tween) */
 @property --btn-from {

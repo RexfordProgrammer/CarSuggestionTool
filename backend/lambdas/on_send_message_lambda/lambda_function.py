@@ -1,6 +1,12 @@
 import boto3
 import json
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../shared"))
+
+
+
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('messages')

@@ -4,31 +4,40 @@ Set-Location -Path $PSScriptRoot
 # Paths relative to script location
 $LambdaFile = Join-Path $PSScriptRoot "lambda_function.py"
 $PackageDir = Join-Path $PSScriptRoot "package"
+$SharedDir  = Join-Path $PSScriptRoot "..\..\shared_helpers"
 $ZipFile    = Join-Path $PSScriptRoot "function.zip"
 
 $Function   = "on_connect"
 $Region     = "us-east-1"
-$Profile1    = "Fall2025-CS410-Matrix-661364632619"
 
-Write-Host "==> Packaging dependencies and code into $ZipFile"
+Write-Host "==> Packaging Lambda: $Function"
+Write-Host "==> Creating archive at $ZipFile"
 
 # Remove old zip
 if (Test-Path $ZipFile) { Remove-Item $ZipFile }
 
-# Step 1: Add dependencies
+# Step 1: Add dependency packages (if they exist)
 if (Test-Path $PackageDir) {
+    Write-Host "  • Adding dependencies from $PackageDir"
     Compress-Archive -Path "$PackageDir\*" -DestinationPath $ZipFile -Force
 }
 
-# Step 2: Add lambda_function.py
+# Step 2: Add main lambda file
+Write-Host "  • Adding lambda_function.py"
 Compress-Archive -Path $LambdaFile -Update -DestinationPath $ZipFile
 
-# Step 3: Upload to Lambda
-Write-Host "==> Uploading to AWS Lambda: $Function"
+# Step 3: Add shared helper files
+if (Test-Path $SharedDir) {
+    Write-Host "  • Adding shared helpers from $SharedDir"
+    Compress-Archive -Path "$SharedDir\*" -Update -DestinationPath $ZipFile
+}
+
+# Step 4: Upload to AWS Lambda
+Write-Host "==> Uploading to AWS Lambda function: $Function"
 aws lambda update-function-code `
   --function-name $Function `
   --zip-file fileb://$ZipFile `
-  --profile $Profile1 `
-  --region $Region
+  --region $Region `
+  --profile $Profile
 
 Write-Host "==> Done!"

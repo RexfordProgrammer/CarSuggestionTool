@@ -64,7 +64,7 @@ def lambda_handler(event, context):
         username = body.get("username")
         password = body.get("password")
 
-        if username != "testuser" or password != "testpass":
+        if username != "testusername" or password != "nodatabreach":
             return make_response(401, {"error": "Invalid credentials"})
 
         # Build JWT payload

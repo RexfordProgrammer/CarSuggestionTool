@@ -8,7 +8,6 @@ $ZipFile    = Join-Path $PSScriptRoot "function.zip"
 
 $Function   = "on_login"
 $Region     = "us-east-1"
-$Profile1    = "Fall2025-CS410-Matrix-661364632619"
 
 Write-Host "==> Packaging dependencies and code into $ZipFile"
 
@@ -28,7 +27,6 @@ Write-Host "==> Uploading to AWS Lambda: $Function"
 aws lambda update-function-code `
   --function-name $Function `
   --zip-file fileb://$ZipFile `
-  --profile $Profile1 `
   --region $Region
 
 Write-Host "==> Done!"

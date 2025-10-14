@@ -17,8 +17,17 @@ def _get_model_response(connection_id):
     try:
         messages_for_payload = _get_session_messages(connection_id)
         
+        system_prompt = {
+            "role": "system",
+            "content": (
+                "You are an intelligent assistant embedded in a car suggestion tool. "
+                "Be concise, polite, and guide the user in a conversational way. "
+                "If you need clarification, ask brief follow-up questions."
+            )
+        }
+
         payload = {
-            "messages": messages_for_payload,
+            "messages": [system_prompt] + messages_for_payload,
             "temperature": 0.7
         }
         

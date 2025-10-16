@@ -1,12 +1,18 @@
-node_modules
-backend/lambdas/ws/on_disconnect_lambda/function.zip
-backend/lambdas/ws/on_connect_lambda/function.zip
+# Dependencies
+node_modules/
+.venv/
+
+# Environment files
 backend/.env
+
+# Python bytecode
 *.pyc
-backend/lambdas/ws/on_send_message_lambda/function.zip
-/backend/lambdas/ws/on_login_lambda/package
-backend/lambdas/on_default_lambda/function.zip
-backend/lambdas/on_login_lambda/function.zip
-backend/lambdas/on_connect_lambda/function.zip
-backend/lambdas/on_disconnect_lambda/function.zip
-backend/lambdas/on_send_message_lambda/function.zip
+__pycache__/
+
+# Lambda build artifacts
+backend/lambdas/**/function.zip
+backend/lambdas/ws/on_login_lambda/package/
+
+# Logs and temp files
+*.log
+*.tmp

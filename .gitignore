@@ -16,3 +16,6 @@ backend/lambdas/ws/on_login_lambda/package/
 # Logs and temp files
 *.log
 *.tmp
+
+# Miscellaneous
+enter_venv.*

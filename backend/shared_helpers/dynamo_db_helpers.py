@@ -36,6 +36,14 @@ def save_bot_response(botmessage, connection_id):
 
 #assume preferences is a list or dist of some kind, it'll be implemented later
 #once we actually know what preferences we want to store
+def initalize_user_preference(username):
+    preferenceTable.putItem(
+        Item = {
+                "preferenceKey": username,
+                "preference": []
+            }
+    )
+
 def save_user_preference(username, preference):
     preferenceTable.update_item(
         Key={'preferenceKey': username}, #sort table by username

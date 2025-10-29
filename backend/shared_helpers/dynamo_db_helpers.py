@@ -40,9 +40,7 @@ def save_user_preference(username, preference):
     preferenceTable.update_item(
         Key={'preferenceKey': username}, #sort table by username
         UpdateExpression="SET preferences = :new_preferences)",
-        ExpressionAttributeValues={
-            ':new_preferences': preference
-        }
+        ExpressionAttributeValues={':new_preferences': preference}
     )
 
 def get_user_preferences(username):

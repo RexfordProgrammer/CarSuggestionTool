@@ -1,11 +1,11 @@
 {
   "TableName": "nhtsa_data",
   "AttributeDefinitions": [
-    { "AttributeName": "PK",           "AttributeType": "S" },
-    { "AttributeName": "SK",           "AttributeType": "S" },
-    { "AttributeName": "MODEL_YR",     "AttributeType": "N" },
+    { "AttributeName": "PK", "AttributeType": "S" },
+    { "AttributeName": "SK", "AttributeType": "S" },
+    { "AttributeName": "MODEL_YR", "AttributeType": "S" },
     { "AttributeName": "VEHICLE_TYPE", "AttributeType": "S" },
-    { "AttributeName": "MAKE",         "AttributeType": "S" }
+    { "AttributeName": "MAKE", "AttributeType": "S" }
   ],
   "KeySchema": [
     { "AttributeName": "PK", "KeyType": "HASH" },
@@ -17,7 +17,7 @@
       "IndexName": "GSI_Year",
       "KeySchema": [
         { "AttributeName": "MODEL_YR", "KeyType": "HASH" },
-        { "AttributeName": "PK",       "KeyType": "RANGE" }
+        { "AttributeName": "PK", "KeyType": "RANGE" }
       ],
       "Projection": { "ProjectionType": "ALL" }
     },
@@ -25,15 +25,15 @@
       "IndexName": "GSI_VehicleType",
       "KeySchema": [
         { "AttributeName": "VEHICLE_TYPE", "KeyType": "HASH" },
-        { "AttributeName": "PK",           "KeyType": "RANGE" }
+        { "AttributeName": "PK", "KeyType": "RANGE" }
       ],
       "Projection": { "ProjectionType": "ALL" }
     },
     {
       "IndexName": "GSI_MakeYear",
       "KeySchema": [
-        { "AttributeName": "MAKE",      "KeyType": "HASH" },
-        { "AttributeName": "MODEL_YR",  "KeyType": "RANGE" }
+        { "AttributeName": "MAKE", "KeyType": "HASH" },
+        { "AttributeName": "MODEL_YR", "KeyType": "RANGE" }
       ],
       "Projection": { "ProjectionType": "ALL" }
     }

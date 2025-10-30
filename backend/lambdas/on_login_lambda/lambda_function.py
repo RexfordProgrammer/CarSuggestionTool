@@ -85,12 +85,13 @@ def lambda_handler(event, context):
         print("Error:", str(e))
         return make_response(500, {"error": str(e)})
 
-dynamodb = boto3.resource('dynamodb')
-preferenceTable = dynamodb.Table('session-preferences')
-def initalize_user_preference(username):
-    preferenceTable.putItem(
-        Item = {
-                "preferenceKey": username
-                "preference": []
-            }
-    )
+# dynamodb = boto3.resource('dynamodb')
+# preferenceTable = dynamodb.Table('session-preferences')
+
+# def initalize_user_preference(username):
+#     preferenceTable.putItem(
+#         Item = {
+#                 "preferenceKey": username
+#                 "preference": []
+#             }
+#     )

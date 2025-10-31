@@ -14,6 +14,16 @@ aws s3 cp $file "s3://vehicle-data-for-chatbot/nhtsa_auto/$file" --region $regio
 Write-Host "Loading schema from nhtsa_schema.json ..."
 $json = Get-Content "nhtsa_schema.json" -Raw
 
+# === Delete existing table if it exists ===
+Write-Host "Checking for existing table $table ..."
+aws dynamodb describe-table --table-name $table --region $region >$null 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Deleting existing table $table ..."
+    aws dynamodb delete-table --table-name $table --region $region
+    Write-Host "Waiting for deletion to complete ..."
+    aws dynamodb wait table-not-exists --table-name $table --region $region
+}
+
 # === Import into DynamoDB ===
 Write-Host "Importing $file into DynamoDB table $table ..."
 aws dynamodb import-table `
@@ -22,4 +32,4 @@ aws dynamodb import-table `
   --table-creation-parameters "$json" `
   --region $region
 
-Write-Host "Import completed for $table."
+Write-Host "✅ Import completed for $table."

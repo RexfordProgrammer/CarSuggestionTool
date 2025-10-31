@@ -3,14 +3,11 @@
 # sys.path.append(os.path.join(os.path.dirname(__file__), "../../shared_helpers"))
 # Include the above to import this file in your lambda
 
-import json
-import boto3
 from typing import List, Dict, Any
-
+from bedrock_caller import call_bedrock
 from dynamo_db_helpers import get_session_messages
 
 # === Bedrock client ===
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
 def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
     """Ensure each message has the correct structure."""
@@ -24,7 +21,6 @@ def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
 
 
 def get_model_response(connection_id: str) -> str:
-    try:
         # Get chat history from DynamoDB
         messages_for_payload = get_session_messages(connection_id)
 
@@ -51,21 +47,5 @@ def get_model_response(connection_id: str) -> str:
             "temperature": 0.7,
         }
 
-        model_id = "ai21.jamba-1-5-mini-v1:0"
-        response = bedrock.invoke_model(modelId=model_id, body=json.dumps(payload))
+        return call_bedrock(payload)
 
-        # Parse the model response
-        body_str = response["body"].read()
-        result = json.loads(body_str)
-
-        # Safely extract the reply content
-        reply = "(no output)"
-        try:
-            reply = result["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError):
-            print("Unexpected Bedrock response structure:", json.dumps(result, indent=2))
-
-        return reply.strip() if isinstance(reply, str) else "(invalid reply format)"
-
-    except Exception as e:
-        return f"(error from bedrock: {e})"

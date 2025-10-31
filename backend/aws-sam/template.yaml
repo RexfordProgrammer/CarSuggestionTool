@@ -1,31 +1,46 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+Description: >
+  Car Suggestion Tool — SAM stack using existing IAM roles for Lambda functions.
+
 Globals:
   Function:
     Runtime: python3.12
     Timeout: 30
-    MemorySize: 512
-    Layers:
-      - !Ref SharedLayer
+    MemorySize: 256
 
 Resources:
-  SharedLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      ContentUri: .
-      CompatibleRuntimes: [python3.12]
-      RetentionPolicy: Delete
-
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: app.lambda_handler
       CodeUri: lambdas/on_connect/
-      Description: Handles WebSocket connect events
+      Handler: app.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
 
-  OnMessageFunction:
+  OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
+      CodeUri: lambdas/on_disconnect/
       Handler: app.lambda_handler
-      CodeUri: lambdas/on_message/
-      Description: Handles WebSocket messages
+      Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
+
+  OnDefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/on_default/
+      Handler: app.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
+
+  OnLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/on_login/
+      Handler: app.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
+
+  OnSendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/on_send_message/
+      Handler: app.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd

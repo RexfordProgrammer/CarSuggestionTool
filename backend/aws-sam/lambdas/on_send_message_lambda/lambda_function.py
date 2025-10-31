@@ -8,13 +8,11 @@ from dynamo_db_helpers import get_session_messages, save_user_message
 from call_bedrock import get_model_response
 
 
-
-
-
 def lambda_handler(event, context):
     print("Full event:", json.dumps(event))
-
+    # Session Identifier
     connection_id = event["requestContext"]["connectionId"]
+    # API Domain name 
     domain = event["requestContext"]["domainName"]
     stage = event["requestContext"]["stage"]
 
@@ -25,22 +23,23 @@ def lambda_handler(event, context):
         body = {}
 
     user_message = body.get("text", "(no text)")
+    # this passes the user message to the DB for model context
     save_user_message(user_message, connection_id)
 
     bedrock_reply = "(no output)"
+    ## SINCE THE message has already been passed to the backend 
+    ## THE DB to be saved, simply requests the next message in the 
+    ## Sequence for the
     bedrock_reply = get_model_response(connection_id)
     
-    save_user_message(bedrock_reply, connection_id)
-    
-    print ("Chat History: ", get_session_messages(connection_id))
+    ## This is just setting up the connection which will end up passing the information back to the user 
+    apigw = boto3.client("apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}")
 
-    apigw = boto3.client(
-        "apigatewaymanagementapi",
-        endpoint_url=f"https://{domain}/{stage}"
-    )
-
+    ## this is just a package to return to frontend
     payload = {"type": "bedrock_reply", "reply": bedrock_reply}
 
+
+    ## ATTEMPT TO RETURN PAYLOAD TO CALLER ##
     try:
         apigw.post_to_connection(
             ConnectionId=connection_id,

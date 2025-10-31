@@ -8,6 +8,9 @@ from dynamo_db_helpers import get_session_messages, save_user_message
 from call_bedrock import get_model_response
 
 
+
+
+
 def lambda_handler(event, context):
     print("Full event:", json.dumps(event))
 

@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 512
+    Layers:
+      - !Ref SharedLayer
+
+Resources:
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: .
+      CompatibleRuntimes: [python3.12]
+      RetentionPolicy: Delete
+
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      CodeUri: lambdas/on_connect/
+      Description: Handles WebSocket connect events
+
+  OnMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      CodeUri: lambdas/on_message/
+      Description: Handles WebSocket messages

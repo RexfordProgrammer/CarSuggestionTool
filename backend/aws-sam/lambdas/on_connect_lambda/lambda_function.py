@@ -19,6 +19,7 @@ def get_jwt_secret():
     _cached_secret = response["SecretString"]
     return _cached_secret
 
+
 def lambda_handler(event, context):
     print("Connect event:", json.dumps(event))
 

@@ -7,6 +7,8 @@ from typing import List, Dict, Any
 from bedrock_caller import call_bedrock
 from dynamo_db_helpers import get_session_messages
 
+TARGET_FLAGS = ["number_of_seats"]
+
 # === Bedrock client ===
 
 def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
@@ -33,12 +35,14 @@ def get_model_response(connection_id: str) -> str:
                 print(f"Skipping invalid message: {ve}")
 
         # Add system prompt at the start
+        flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
         system_prompt = {
             "role": "system",
             "content": (
                 "You are an intelligent assistant embedded in a car suggestion tool. "
                 "Be concise, polite, and guide the user in a conversational way. "
                 "If you need clarification, ask brief follow-up questions."
+                f"Guide conversation along lines of {flags_str}"
             ),
         }
 

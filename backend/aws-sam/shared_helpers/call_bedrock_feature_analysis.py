@@ -1,20 +1,21 @@
-# import sys
-# import os
-# sys.path.append(os.path.join(os.path.dirname(__file__), "../../shared_helpers"))
-# Include the above to import this file in your lambda
-
 import json
 import boto3
 from typing import List, Dict, Any
 
 from dynamo_db_helpers import get_session_messages
 
-# === Bedrock client ===
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+
+# Define your known flag names here — easy to expand later
+TARGET_FLAGS = [
+    "number_of_seats",
+    "fuel_efficiency",
+    "cargo_space",
+    "safety_rating"
+]
 
 
 def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
-    """Ensure each message has the correct structure."""
     if not isinstance(msg, dict):
         raise ValueError("Message must be a dictionary.")
     role = msg.get("role")
@@ -25,11 +26,13 @@ def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
 
 
 def get_model_response(connection_id: str) -> str:
+    """
+    Use the Bedrock LLM to determine which feature flags are checked or unchecked
+    based on the conversation.
+    """
     try:
-        # Get chat history from DynamoDB
         messages_for_payload = get_session_messages(connection_id)
 
-        # Validate messages — filter out malformed ones
         validated_messages: List[Dict[str, str]] = []
         for m in messages_for_payload:
             try:
@@ -37,36 +40,53 @@ def get_model_response(connection_id: str) -> str:
             except ValueError as ve:
                 print(f"Skipping invalid message: {ve}")
 
-        # Add system prompt at the start
+        # Construct the dynamic system prompt with the explicit flag set
+        flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
         system_prompt = {
             "role": "system",
             "content": (
-                "You are an intelligent assistant embedded in a car suggestion tool. "
-                "Be concise, polite, and guide the user in a conversational way. "
-                "If you need clarification, ask brief follow-up questions."
+                f"You are an assistant analyzing a conversation to determine which "
+                f"car feature flags are checked or unchecked.\n\n"
+                f"The available flags to analyze are: {flags_str}.\n\n"
+                "Return your answer as a JSON object where each key is one of these flags "
+                "and each value is true (checked) or false (unchecked).\n"
+                "If a flag was not mentioned, mark it false.\n\n"
+                "Example output:\n"
+                "{\n"
+                "  \"number_of_seats\": true,\n"
+                "  \"fuel_efficiency\": false,\n"
+                "  \"cargo_space\": false,\n"
+                "  \"safety_rating\": false\n"
+                "}\n\n"
+                "Output only JSON — no explanations, text, or commentary."
             ),
         }
 
         payload = {
             "messages": [system_prompt] + validated_messages,
-            "temperature": 0.7,
+            "temperature": 0.2,
         }
 
         model_id = "ai21.jamba-1-5-mini-v1:0"
         response = bedrock.invoke_model(modelId=model_id, body=json.dumps(payload))
 
-        # Parse the model response
         body_str = response["body"].read()
         result = json.loads(body_str)
 
-        # Safely extract the reply content
-        reply = "(no output)"
+        reply = None
         try:
             reply = result["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
             print("Unexpected Bedrock response structure:", json.dumps(result, indent=2))
+            reply = "(no output)"
 
-        return reply.strip() if isinstance(reply, str) else "(invalid reply format)"
+        try:
+            flags = json.loads(reply)
+        except Exception:
+            print("Model did not return valid JSON, raw reply:", reply)
+            flags = {"error": "invalid_json", "raw_output": reply}
+
+        return json.dumps(flags)
 
     except Exception as e:
-        return f"(error from bedrock: {e})"
+        return json.dumps({"error": f"bedrock_call_failed: {e}"})

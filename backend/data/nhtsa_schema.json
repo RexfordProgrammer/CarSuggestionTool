@@ -1,0 +1,12 @@
+{
+  "TableName": "nhtsa_data",
+  "AttributeDefinitions": [
+    { "AttributeName": "MAKE", "AttributeType": "S" },
+    { "AttributeName": "MODEL", "AttributeType": "S" }
+  ],
+  "KeySchema": [
+    { "AttributeName": "MAKE", "KeyType": "HASH" },
+    { "AttributeName": "MODEL", "KeyType": "RANGE" }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}

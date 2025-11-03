@@ -16,3 +16,12 @@ backend/lambdas/ws/on_login_lambda/package/
 # Logs and temp files
 *.log
 *.tmp
+backend/lambdas/ws/on_send_message_lambda/function.zip
+/backend/lambdas/ws/on_login_lambda/package
+backend/lambdas/on_default_lambda/function.zip
+backend/lambdas/on_login_lambda/function.zip
+backend/lambdas/on_connect_lambda/function.zip
+backend/lambdas/on_disconnect_lambda/function.zip
+backend/lambdas/on_send_message_lambda/function.zip
+/backend/aws-sam/.aws-sam
+CarSuggestionTool.code-workspace

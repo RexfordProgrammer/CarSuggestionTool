@@ -1,4 +1,4 @@
 
 Set-Location -Path $PSScriptRoot
 
-sam deploy 
+sam build --cached --parallel

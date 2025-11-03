@@ -5,7 +5,7 @@ codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\l
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "a6c9cc54cba825b7b7144451ebd38511"
 packagetype = "Zip"
 functions = ["OnConnectFunction"]
 
@@ -14,7 +14,7 @@ codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\l
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "714a8135cc4a35e39acb31147488c689"
 packagetype = "Zip"
 functions = ["OnDisconnectFunction"]
 
@@ -23,7 +23,7 @@ codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\l
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "a6c9cc54cba825b7b7144451ebd38511"
 packagetype = "Zip"
 functions = ["OnDefaultFunction"]
 
@@ -32,7 +32,7 @@ codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\l
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "714a8135cc4a35e39acb31147488c689"
 packagetype = "Zip"
 functions = ["OnLoginFunction"]
 
@@ -41,7 +41,7 @@ codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\l
 runtime = "python3.12"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "0eb75e85cb201492a0fa9ff7e8cf2deb"
 packagetype = "Zip"
 functions = ["OnSendMessageFunction"]
 

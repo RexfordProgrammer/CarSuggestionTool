@@ -21,7 +21,7 @@ Resources:
     Properties:
       FunctionName: on_connect_v2
       CodeUri: OnConnectFunction
-      Handler: app.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
       Layers:
       - Ref: SharedHelpersLayer
@@ -32,7 +32,7 @@ Resources:
     Properties:
       FunctionName: on_disconnect_v2
       CodeUri: OnDisconnectFunction
-      Handler: app.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
       Layers:
       - Ref: SharedHelpersLayer
@@ -43,7 +43,7 @@ Resources:
     Properties:
       FunctionName: on_default_v2
       CodeUri: OnDefaultFunction
-      Handler: app.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
       Layers:
       - Ref: SharedHelpersLayer
@@ -54,7 +54,7 @@ Resources:
     Properties:
       FunctionName: on_login_v2
       CodeUri: OnLoginFunction
-      Handler: app.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
       Layers:
       - Ref: SharedHelpersLayer
@@ -65,7 +65,7 @@ Resources:
     Properties:
       FunctionName: on_send_message_v2
       CodeUri: OnSendMessageFunction
-      Handler: app.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
       Layers:
       - Ref: SharedHelpersLayer

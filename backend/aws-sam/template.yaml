@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Car Suggestion Tool — SAM stack using existing IAM roles for Lambda functions.
+  Car Suggestion Tool — SAM stack using existing IAM roles for Lambda functions (v2),
+  now with SharedHelpers layer for reusable code.
 
 Globals:
   Function:
@@ -10,37 +11,63 @@ Globals:
     MemorySize: 256
 
 Resources:
+  # Shared Python Layer for all helper files
+  SharedHelpersLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: shared_helpers_v2
+      ContentUri: layers/shared_helpers/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Delete
+
+  # === Lambda Functions ===
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: on_connect_v2
       CodeUri: lambdas/on_connect/
       Handler: app.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
+      Layers:
+        - !Ref SharedHelpersLayer
 
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: on_disconnect_v2
       CodeUri: lambdas/on_disconnect/
       Handler: app.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
+      Layers:
+        - !Ref SharedHelpersLayer
 
   OnDefaultFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: on_default_v2
       CodeUri: lambdas/on_default/
       Handler: app.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
+      Layers:
+        - !Ref SharedHelpersLayer
 
   OnLoginFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: on_login_v2
       CodeUri: lambdas/on_login/
       Handler: app.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
+      Layers:
+        - !Ref SharedHelpersLayer
 
   OnSendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: on_send_message_v2
       CodeUri: lambdas/on_send_message/
       Handler: app.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
+      Layers:
+        - !Ref SharedHelpersLayer

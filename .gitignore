@@ -10,3 +10,4 @@ backend/lambdas/on_login_lambda/function.zip
 backend/lambdas/on_connect_lambda/function.zip
 backend/lambdas/on_disconnect_lambda/function.zip
 backend/lambdas/on_send_message_lambda/function.zip
+/backend/aws-sam/.aws-sam

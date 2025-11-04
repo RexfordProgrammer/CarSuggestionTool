@@ -44,6 +44,8 @@ def lambda_handler(event, context):
     ## THE DB to be saved, simply requests the next message in the 
     ## Sequence for the
     backend_response = get_model_response(connection_id)
+    ### New parrallel call
+    
     
     ## This is just setting up the connection which will end up passing the information back to the user 
     
@@ -59,6 +61,8 @@ def lambda_handler(event, context):
     ### and call_bedrock then push_to_caller"
     push_message_to_caller(connection_id,apigw,backend_response)
 
+    
+    
 
     ## We should only allow this send message to end once all the logic is complete
     return {"statusCode": 200}

@@ -1,9 +1,7 @@
+import re
+from bedrock_caller import call_bedrock
 from typing import List, Literal
 from pydantic import BaseModel, ValidationError
-import re
-
-from dynamo_db_helpers import get_session_messages
-from bedrock_caller import call_bedrock
 
 TARGET_FLAGS = ["number_of_seats"]
 TRIGGER_LINE = "Hold on while we gather those recommendations for you..."
@@ -12,7 +10,8 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
 
-# Keywords that signal a recommendation request
+
+# === Keyword detection ===
 KEYWORDS_RECO = re.compile(
     r"\b(recommend|reccomend|suggest|what (?:car|vehicle) should I|get|show.+cars?)\b",
     re.IGNORECASE
@@ -35,42 +34,49 @@ def _enforce_trigger(text: str) -> str:
         text += "."
     return f"{text}\n{TRIGGER_LINE}"
 
-def get_conversational_response(connection_id: str) -> str:
-    """Retrieve recent session messages, validate, call Bedrock, and enforce the system trigger."""
-    raw_messages = get_session_messages(connection_id) or []
-    print("Raw messages returned:", raw_messages)
 
+def get_conversational_response(connection_id: str) -> str:
+    """
+    Generate a conversational response for the given connection by calling Bedrock.
+    Override the model output if recommendation intent is detected.
+    """
+    from dynamo_db_helpers import get_session_messages
+
+    raw_messages = get_session_messages(connection_id) or []
     validated_messages: List[ChatMessage] = []
     for m in raw_messages:
         try:
             if m.get("role") in ("user", "assistant"):
                 validated_messages.append(ChatMessage(**m))
-        except ValidationError as ve:
-            print(f"Skipping invalid message: {ve}")
+        except ValidationError:
+            continue
 
-    # --- Construct system instructions ---
     flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
-    system_instructions = (
+
+    system_prompt = (
         "You are an intelligent assistant embedded in a car suggestion tool. "
-        "Be concise, polite, and guide the user naturally. "
-        "Ask short follow-up questions only if clarification is needed. "
-        f"Focus the conversation on attributes such as {flags_str}. "
-        "When the user asks for car recommendations or expresses intent to get suggestions, "
-        f'you MUST end your reply with exactly this line on its own: "{TRIGGER_LINE}" '
-        "and do not write anything after that line."
+        "You must always respond concisely and politely, and keep the conversation focused "
+        f"on the user's car preferences such as {flags_str}. "
+        "When you detect that the user is asking for specific car recommendations or expressing intent "
+        "to be recommended a vehicle, you MUST end your message with the exact phrase:\n\n"
+        f"{TRIGGER_LINE}\n\n"
+        "Make sure that phrase is the final line of your reply. "
+        "Do not add any text, punctuation, or commentary after it. "
+        "If the user is *not* asking for car recommendations, simply continue the conversation naturally."
     )
 
-    payload = {
-        "system": system_instructions,
-        "messages": [m.model_dump() for m in validated_messages],
-        "temperature": 0.2,
-        "max_tokens": 500
-    }
+    print(f"Calling Bedrock for connection {connection_id} with system prompt:\n{system_prompt}\n")
 
-    print("Payload prepared for Bedrock (AI21 Jamba):", payload)
-    reply = call_bedrock(payload) or ""
-
+    # === Force override if user asked for recommendations ===
     if _wants_recommendations(validated_messages):
-        reply = _enforce_trigger(reply)
+        print("Detected recommendation intent — overriding model output.")
+        return TRIGGER_LINE
 
-    return reply
+    # Otherwise, call Bedrock as usual
+    reply = call_bedrock(connection_id, system_prompt)
+
+    # Just in case model partially follows the rule, enforce ending
+    if _wants_recommendations(validated_messages):
+        return _enforce_trigger(reply)
+
+    return reply or "(no reply from model)"

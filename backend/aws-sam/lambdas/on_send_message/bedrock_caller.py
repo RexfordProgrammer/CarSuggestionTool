@@ -1,56 +1,56 @@
 import boto3
 import json
+from dynamo_db_helpers import get_session_messages, save_bot_response
 
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
-def call_bedrock(payload):
+
+def call_bedrock(connection_id: str, system_prompt: str) -> str:
     try:
-        model_id = "ai21.jamba-1-5-mini-v1:0"
-        system_text = payload.get("system", "")
-        messages = payload.get("messages", [])
-        temperature = payload.get("temperature", 0.2)
-        max_tokens = payload.get("max_tokens", 500)
+        # === Fetch prior session messages from DynamoDB ===
+        raw_messages = get_session_messages(connection_id) or []
+        print(f"Fetched {len(raw_messages)} messages for session {connection_id}")
 
-        # --- Compose message format for Jamba ---
-        jamba_messages = []
-        if system_text:
-            jamba_messages.append({"role": "system", "content": system_text})
+        # === Compose messages for AI21 Jamba ===
+        jamba_messages = [{"role": "system", "content": system_prompt}]
+        for msg in raw_messages:
+            role = msg.get("role")
+            content = msg.get("content")
+            if role in ("user", "assistant") and isinstance(content, str):
+                jamba_messages.append({"role": role, "content": content})
 
-        for msg in messages:
-            if msg["role"] not in ("user", "assistant"):
-                continue
-            jamba_messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
-
+        # === Build Bedrock request body ===
         body = {
             "messages": jamba_messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+            "temperature": 0.5,
         }
 
-        # --- Call Bedrock model ---
+        print("Prepared Jamba payload:", json.dumps(body, indent=2))
+
+        # === Invoke AI21 Jamba 1.5 Mini via Bedrock ===
         response = bedrock.invoke_model(
-            modelId=model_id,
-            body=json.dumps(body)
+            modelId="ai21.jamba-1-5-mini-v1:0",
+            body=json.dumps(body),
         )
 
-        # --- Parse model response ---
         body_str = response["body"].read()
         result = json.loads(body_str)
 
-        # Jamba responses use `output_text` for simplicity
-        if "output_text" in result:
-            reply = result["output_text"]
+        if "outputText" in result:
+            reply = result["outputText"]
         else:
             try:
                 reply = result["choices"][0]["message"]["content"]
             except (KeyError, IndexError, TypeError):
-                print("Unexpected Bedrock response structure:", json.dumps(result, indent=2))
+                print("Unexpected Bedrock response:", json.dumps(result, indent=2))
                 reply = "(no output)"
 
-        return reply.strip() if isinstance(reply, str) else "(invalid reply format)"
+        if isinstance(reply, str):
+            save_bot_response(reply, connection_id)
+            return reply.strip()
+        else:
+            return "(invalid reply format)"
 
     except Exception as e:
+        print("Error in call_bedrock:", str(e))
         return f"(error from bedrock: {e})"

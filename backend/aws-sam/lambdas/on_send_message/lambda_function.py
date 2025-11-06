@@ -1,14 +1,15 @@
 import boto3
 import json
 
-from dynamo_db_helpers import save_user_message 
-from call_bedrock_conversational import get_model_response 
-
+from dynamo_db_helpers import save_user_message, save_user_preference 
+from call_bedrock_conversational import get_conversational_response 
+from call_bedrock_feature_analysis import get_user_preferences_response
 
 def push_message_to_caller(connection_id, apigw, message):
     ## this is just a package to return to frontend
     ## TODO Think about refactoring bedrock reply to backend_reply
-    payload = {"type": "bedrock_reply", "reply": message}
+    payload = {"type": "bedrock_reply",
+               "reply": message}
 
     ## ATTEMPT TO RETURN PAYLOAD TO CALLER ##
     try:
@@ -39,11 +40,16 @@ def lambda_handler(event, context):
     # this passes the user message to the DB for model context
     save_user_message(user_message, connection_id)
 
-    backend_response = "(no output)"
+    conversational_response = "(no output)"
     ## SINCE THE message has already been passed to the backend 
     ## THE DB to be saved, simply requests the next message in the 
     ## Sequence for the
-    backend_response = get_model_response(connection_id)
+    conversational_response = get_conversational_response(connection_id)
+    ### New parrallel call
+    user_prefs = get_user_preferences_response(connection_id)
+    
+    save_user_preference(connection_id, user_prefs)
+    
     
     ## This is just setting up the connection which will end up passing the information back to the user 
     
@@ -57,8 +63,12 @@ def lambda_handler(event, context):
     ### like some unique sequence out of this which we use to actually trigger a different action like 
     ### "Go to x helper and fire get_reccomended_vehicles" then return that into the prompt 
     ### and call_bedrock then push_to_caller"
-    push_message_to_caller(connection_id,apigw,backend_response)
+    push_message_to_caller(connection_id,apigw,conversational_response)
 
+    if ("hold on" in conversational_response.lower()):
+        push_message_to_caller(connection_id,apigw,user_prefs)
+    
+    
 
     ## We should only allow this send message to end once all the logic is complete
     return {"statusCode": 200}

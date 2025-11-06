@@ -1,79 +1,80 @@
+from typing import List, Literal
+from pydantic import BaseModel, ValidationError
 import json
-import boto3
-from typing import List, Dict, Any
+import re
 
-from bedrock_caller import call_bedrock
 from dynamo_db_helpers import get_session_messages
-
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+from bedrock_caller import call_bedrock
 
 TARGET_FLAGS = ["number_of_seats"]
 
-def validate_message(msg: Dict[str, Any]) -> Dict[str, str]:
-    if not isinstance(msg, dict):
-        raise ValueError("Message must be a dictionary.")
-    role = msg.get("role")
-    content = msg.get("content")
-    if not isinstance(role, str) or not isinstance(content, str):
-        raise ValueError("Message missing required 'role' or 'content' string fields.")
-    return {"role": role, "content": content}
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
 
 
-def get_model_response(connection_id: str) -> str:
-    """
-    Use the Bedrock LLM to determine which feature flags are checked or unchecked
-    based on the conversation.
-    """
-    messages_for_payload = get_session_messages(connection_id)
+def get_user_preferences_response(connection_id: str) -> str:
+    """Retrieve messages, validate, call Bedrock, and interpret structured JSON preferences."""
 
-    validated_messages: List[Dict[str, str]] = []
-    for m in messages_for_payload:
+    # --- Retrieve prior conversation from DynamoDB ---
+    raw_messages = get_session_messages(connection_id) or []
+    print("Raw messages returned:", raw_messages)
+
+    validated_messages: List[ChatMessage] = []
+    for m in raw_messages:
         try:
-            validated_messages.append(validate_message(m))
-        except ValueError as ve:
+            if m.get("role") in ("user", "assistant"):
+                validated_messages.append(ChatMessage(**m))
+        except ValidationError as ve:
             print(f"Skipping invalid message: {ve}")
 
-    # Construct the dynamic system prompt with the explicit flag set
+    # Fallback if no messages found
+    if not validated_messages:
+        print("No messages found; using default fallback message.")
+        validated_messages.append(ChatMessage(role="user", content="Find me a car with 5 seats"))
+
+    # --- System instructions ---
     flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
-    system_prompt = {
-        "role": "system",
-        "content": (
-            f"You are an assistant analyzing a conversation to determine which "
-            f"car feature flags are checked or unchecked.\n\n"
-            f"The available flags to analyze are: {flags_str}.\n\n"
-            "Return your answer as a JSON object where each key is one of these flags "
-            "and each value is true (checked) or false (unchecked).\n"
-            "If a flag was not mentioned, mark it false.\n\n"
-            "Example output:\n"
-            "{\n"
-            "  \"number_of_seats\": true,\n"
-            "}\n\n"
-            "Output only JSON — no explanations, text, or commentary."
-        ),
-    }
+    system_instructions = (
+        "You are a strict JSON generator analyzing the conversation to determine which "
+        "car feature flags were mentioned. The available flags are: "
+        f"{flags_str}. Return ONLY valid JSON where each key is one of these flags "
+        "and each value is true (mentioned) or false (not mentioned). "
+        "If a flag wasn't mentioned, mark it false.\n\n"
+        "Example output:\n{\n  \"number_of_seats\": true\n}\n"
+        "Rules:\n1. Output must start with '{' and end with '}'.\n"
+        "2. Do not include explanations or commentary.\n"
+        "3. Never write anything outside the JSON object."
+    )
 
+    # --- Payload identical to conversational format ---
     payload = {
-        "messages": [system_prompt] + validated_messages,
-        "temperature": 0.2,
+        "system": system_instructions,
+        "messages": [m.model_dump() for m in validated_messages],
+        "temperature": 0.0,
+        "max_tokens": 200,
     }
 
-    ## Abstracted Bedrock call
-    response = call_bedrock(payload) 
+    print("Payload prepared for Bedrock (unified structure):", json.dumps(payload, indent=2))
 
-    body_str = response["body"].read()
-    result = json.loads(body_str)
+    # --- Bedrock call ---
+    raw_reply = call_bedrock(payload)
+    print("Raw reply from Bedrock:", repr(raw_reply))
 
-    reply = None
+    if not raw_reply:
+        print("Warning: Empty reply from Bedrock, returning fallback JSON.")
+        return json.dumps({"error": "empty_reply_from_model"})
+
+    # --- Extract valid JSON if the model adds extra text ---
     try:
-        reply = result["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        print("Unexpected Bedrock response structure:", json.dumps(result, indent=2))
-        reply = "(no output)"
+        json_text = raw_reply[raw_reply.index("{"): raw_reply.rindex("}") + 1]
+        parsed_flags = json.loads(json_text)
+    except Exception as e:
+        print("Model did not return valid JSON:", str(e))
+        print("Raw model output:", raw_reply)
+        parsed_flags = {"error": "invalid_json", "raw_output": raw_reply}
 
-    try:
-        flags = json.loads(reply)
-    except Exception:
-        print("Model did not return valid JSON, raw reply:", reply)
-        flags = {"error": "invalid_json", "raw_output": reply}
-
-    return json.dumps(flags)
+    # Always return a string
+    final = json.dumps(parsed_flags)
+    print("Final structured JSON reply:", final)
+    return final

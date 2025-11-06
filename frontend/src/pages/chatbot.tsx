@@ -9,26 +9,35 @@ function App() {
 
   const socketRef = useRef<WebSocket | null>(null);
 useEffect(() => {
-  const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
+  const token =
+    localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
   if (!token) {
     console.error("No auth token found");
     return;
   }
 
-  // Attach token as query param
-  const wsUrl = `wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1?token=${encodeURIComponent(token)}`;
+  const wsUrl = `wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1?token=${encodeURIComponent(
+    token
+  )}`;
   const socket = new WebSocket(wsUrl);
   socketRef.current = socket;
 
   socket.onopen = () => {
     setConnected(true);
     setMessages((prev) => [...prev, "Connected"]);
+
+    // ✅ Send blank message immediately on connect
+    const initPayload = JSON.stringify({
+      action: "sendMessage",
+      text: "Start Session",
+    });
+    console.log("Sending init payload:", initPayload);
+    socket.send(initPayload);
   };
 
   socket.onmessage = (event) => {
-    //     payload = {"type": "bedrock_reply", "reply": bedrock_reply}
-    const reponsebody = JSON.parse(event.data)
-    setMessages((prev) => [...prev, "Bot: " + reponsebody.reply]);
+    const responseBody = JSON.parse(event.data);
+    setMessages((prev) => [...prev, "Bot: " + responseBody.reply]);
   };
 
   socket.onclose = () => {
@@ -45,7 +54,6 @@ useEffect(() => {
     socket.close();
   };
 }, []);
-
 
   // --- Send message handler ---
   const sendMessage = () => {

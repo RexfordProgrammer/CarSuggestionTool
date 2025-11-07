@@ -3,7 +3,6 @@ import os, json, boto3
 from typing import Dict, List
 from dynamo_db_helpers import get_session_messages, save_user_preference
 from target_flags import get_target_flags
-# TARGET_FLAGS = ["number_of_seats"]
 
 SPEC = {
     "toolSpec": {
@@ -31,7 +30,7 @@ _ANALYZER_MODEL = os.getenv("FEATURE_ANALYZER_MODEL", "ai21.jamba-1-5-large-v1:0
 
 def _llm_detect_flags(history: List[Dict], flags: List[str]) -> Dict[str, bool]:
     convo = []
-    for m in history:
+    for m in history or []:
         if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str):
             convo.append(f"{m['role'].upper()}: {m['content']}")
     transcript = "\n".join(convo)
@@ -74,7 +73,9 @@ def _llm_detect_flags(history: List[Dict], flags: List[str]) -> Dict[str, bool]:
 
 
 def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
-    flags = tool_input.get("flags") if isinstance(tool_input, dict) else None
+    flags = None
+    if isinstance(tool_input, dict):
+        flags = tool_input.get("flags")
     if not flags:
         flags = get_target_flags()
 

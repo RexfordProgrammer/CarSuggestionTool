@@ -1,14 +1,13 @@
 from tools import fetch_user_preferences
 
-# Register all tools here
 ALL_TOOLS = [fetch_user_preferences]
 
 def tool_specs():
-    """Return the list of toolSpec dicts for all tools."""
+    # Return tool specs
     return [t.SPEC["toolSpec"] for t in ALL_TOOLS]
 
 def dispatch(name: str, connection_id: str, tool_input: dict):
-    """Dispatch tool calls by name."""
+    # dispatch a tool
     for t in ALL_TOOLS:
         if name == t.SPEC["toolSpec"]["name"]:
             return t.handle(connection_id, tool_input)

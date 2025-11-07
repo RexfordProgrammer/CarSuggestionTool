@@ -2,8 +2,9 @@ import os, json, boto3
 from typing import Dict, List
 from dynamo_db_helpers import get_session_messages
 from dynamo_db_helpers import save_user_preference
+from target_flags import get_target_flags
 
-TARGET_FLAGS = ["number_of_seats"]
+# TARGET_FLAGS = ["number_of_seats"]
 
 SPEC = {
     "toolSpec": {
@@ -79,7 +80,7 @@ def _llm_detect_flags(history: List[Dict], flags: List[str]) -> Dict[str, bool]:
 def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
     flags = tool_input.get("flags") if isinstance(tool_input, dict) else None
     if not flags:
-        flags = TARGET_FLAGS
+        flags = get_target_flags()
 
     history = get_session_messages(connection_id) or []
     result = _llm_detect_flags(history, flags)

@@ -1,8 +1,10 @@
 # bedrock_caller.py
 import boto3, json
+import os
 from dynamo_db_helpers import get_session_messages, save_bot_response
 from tools import tool_specs, dispatch
 
+ORCHESTRATOR_MODEL = os.getenv("MASTER_MODEL", "ai21.jamba-1-5-large-v1:0")
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
 def _build_converse_messages(connection_id: str, system_prompt: str):
@@ -21,7 +23,7 @@ def call_bedrock(connection_id: str, system_prompt: str) -> str:
         system, messages = _build_converse_messages(connection_id, system_prompt)
 
         resp = bedrock.converse(
-            modelId="ai21.jamba-1-5-large-v1:0",
+            modelId=ORCHESTRATOR_MODEL,
             system=system,
             messages=messages,
             toolConfig={"tools": tool_specs()},
@@ -51,7 +53,7 @@ def call_bedrock(connection_id: str, system_prompt: str) -> str:
                 })
 
             resp2 = bedrock.converse(
-                modelId="ai21.jamba-1-5-large-v1:0",
+                modelId=ORCHESTRATOR_MODEL,
                 system=system,
                 messages=messages_plus,
                 toolConfig={"tools": tool_specs()},

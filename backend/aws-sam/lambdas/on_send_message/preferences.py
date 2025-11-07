@@ -8,11 +8,11 @@ class Preferences:
     #'VEHICLE_TYPE' str
     #'DRIVE_TRAIN' str
     #'NUM_OF_SEATING' int
-    #'OVERALL_STARS' int between 0 and 5
+    #'OVERALL_STARS' int between 0 and 5 inclusive
 
     class drive_train(Enum):
         FWD = 1
-        twoWD = 2
+        twoWD = 2 #originally 2WD, same applies to other uses of "two" and "four"
         AWD = 3
         fourWD = 4
         RWD = 5
@@ -41,4 +41,3 @@ class Preferences:
         PICKUP = 18
         MINI_PASSENGER_CAR = 19
 
-        

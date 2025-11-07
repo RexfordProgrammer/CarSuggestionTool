@@ -1,7 +1,7 @@
 import boto3
 import json
 
-from dynamo_db_helpers import save_user_message, save_user_preference 
+from dynamo_db_helpers import save_user_message,save_bot_response, save_user_preference 
 from call_bedrock_conversational import get_conversational_response 
 from call_bedrock_feature_analysis import get_user_preferences_response
 
@@ -63,10 +63,11 @@ def lambda_handler(event, context):
     ### like some unique sequence out of this which we use to actually trigger a different action like 
     ### "Go to x helper and fire get_reccomended_vehicles" then return that into the prompt 
     ### and call_bedrock then push_to_caller"
+    save_bot_response(conversational_response, connection_id)
     push_message_to_caller(connection_id,apigw,conversational_response)
 
     if ("hold on" in conversational_response.lower()):
-        push_message_to_caller(connection_id,apigw,user_prefs)
+        push_message_to_caller(connection_id,apigw, user_prefs)
     
     
 

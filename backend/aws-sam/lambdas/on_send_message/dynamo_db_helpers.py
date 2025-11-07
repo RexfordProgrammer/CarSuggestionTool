@@ -44,7 +44,10 @@ def initialize_user_preference(sessionid):
     preferenceTable.put_item(
         Item={
             "preferenceKey": sessionid,
-            "preferences": {},  # start with empty dict
+            "vehicle_type": {},
+            "drive_train": {},
+            "num_of_seating": {},
+            "overall_stars": {}
         }
     )
 
@@ -54,7 +57,7 @@ def save_user_preference(sessionid, preference):
     # You can store as raw dict (recommended) or JSON string if you prefer
     preferenceTable.update_item(
         Key={"preferenceKey": sessionid},
-        UpdateExpression="SET preferences = :new_preferences",
+        UpdateExpression="SET vehicle_type=:new_preferences, drive_train=:new_drive_train, num_of_seating=:new_num_of_seating, overall_stars=:new_overall_stars",
         ExpressionAttributeValues={
             ":new_preferences": preference,
         },
@@ -67,3 +70,4 @@ def get_user_preferences(sessionid):
     response = preferenceTable.get_item(Key={"preferenceKey": sessionid})
     item = response.get("Item")
     return item.get("preferences", {}) if item else {}
+

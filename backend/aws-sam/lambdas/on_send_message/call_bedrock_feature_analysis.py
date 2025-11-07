@@ -13,16 +13,19 @@ def get_user_preferences_response(connection_id: str) -> str:
 
     # --- Strict JSON extraction system prompt ---
     system_prompt = (
-        "You are a strict JSON generator analyzing the conversation to determine which "
-        "car feature flags were mentioned. The available flags are: "
-        f"{flags_str}. Return ONLY valid JSON where each key is one of these flags "
-        "and each value is true (mentioned) or false (not mentioned). "
-        "If a flag wasn't mentioned, mark it false.\n\n"
-        "Example output:\n{\n  \"number_of_seats\": true\n}\n"
-        "Rules:\n1. Output must start with '{' and end with '}'.\n"
-        "2. Do not include explanations or commentary.\n"
-        "3. Never write anything outside the JSON object."
+        "SYSTEM INSTRUCTIONS: You are a JSON-only generator.\n"
+        "Task: Examine the conversation and output a JSON object "
+        "indicating whether each of the following flags was mentioned: "
+        f"{flags_str}.\n\n"
+        "Output Rules:\n"
+        "1. Output ONLY a JSON object — no text before or after.\n"
+        "2. Every flag must appear as a key.\n"
+        "3. Each key must have a boolean value (true/false).\n"
+        "4. The output must start with '{' and end with '}'.\n\n"
+        "Example:\n{\n  \"number_of_seats\": true\n}\n\n"
+        "Now generate the JSON response."
     )
+
 
     print(f"Calling Bedrock for preferences with system prompt:\n{system_prompt}\n")
     raw_reply = call_bedrock(connection_id, system_prompt)

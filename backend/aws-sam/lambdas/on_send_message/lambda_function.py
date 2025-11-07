@@ -67,7 +67,7 @@ def lambda_handler(event, context):
     push_message_to_caller(connection_id,apigw,conversational_response)
 
     if ("hold on" in conversational_response.lower()):
-        push_message_to_caller(connection_id,apigw,"THESE WILL EVENTUALLY BE THE RECCOMENDATIONS")
+        push_message_to_caller(connection_id,apigw, user_prefs)
     
     
 

@@ -7,11 +7,9 @@ bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
 def call_bedrock(connection_id: str, system_prompt: str) -> str:
     try:
-        # === Fetch prior session messages from DynamoDB ===
         raw_messages = get_session_messages(connection_id) or []
         print(f"Fetched {len(raw_messages)} messages for session {connection_id}")
 
-        # === Compose messages for AI21 Jamba ===
         jamba_messages = [{"role": "system", "content": system_prompt}]
         for msg in raw_messages:
             role = msg.get("role")
@@ -19,7 +17,6 @@ def call_bedrock(connection_id: str, system_prompt: str) -> str:
             if role in ("user", "assistant") and isinstance(content, str):
                 jamba_messages.append({"role": role, "content": content})
 
-        # === Build Bedrock request body ===
         body = {
             "messages": jamba_messages,
             "temperature": 0.5,
@@ -27,9 +24,8 @@ def call_bedrock(connection_id: str, system_prompt: str) -> str:
 
         print("Prepared Jamba payload:", json.dumps(body, indent=2))
 
-        # === Invoke AI21 Jamba 1.5 Mini via Bedrock ===
         response = bedrock.invoke_model(
-            modelId="ai21.jamba-1-5-mini-v1:0",
+            modelId="ai21.jamba-1-5-large-v1:0",
             body=json.dumps(body),
         )
 

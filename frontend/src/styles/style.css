@@ -1,29 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  /* Palette mapped from PALETTE */
-  --base: #bbd8ed;
-  --surface: #cde3f3;
-  --surface-alt: #e1e9f4;
+  /* Palette */
+  --base: #bbd8ed;            /* pale steel-blue background */
+  --surface: #d7e6f2;         /* slightly lighter for panels */
+  --surface-alt: #eaf0f8;     /* for cards */
+  --accent: #832b30;          /* strong burgundy-red */
+  --buttons: #9aaec0;         /* soft blue contrast */
   --white: #ffffff;
-  --accent: #832b30;
 
-  /* Backwards-compatible tokens used in this stylesheet */
+  /* Text & neutrals */
+  --fg: #1a1a1a;              /* readable on light bg */
+  --muted: #555;
+
+  /* Surfaces/tokens */
   --bg: var(--surface);
-  --fg: var(--accent);
-  --muted: #7f5b5b;
   --card: var(--surface-alt);
 
-  /* Button gradient stops (animated via @property) — use accent + base for nice contrast */
-  --btn-from: #9aaec0; /* lightened base */
-  --btn-to: var(--accent);
-  --btn-hover-from: #b5d6ee;
-  --btn-hover-to: var(--accent);
-
-  /* Shadows & radii */
+  /* Effects */
   --radius: 1.5rem;
   --shadow-lg: 0 6px 20px rgba(0, 0, 0, .12);
   --ring: 0 0 0 3px rgba(131,43,48,.18);
+  --accent-glow: rgba(131, 43, 48, 0.35);
 
   /* Navbar */
   --nav-h: 64px;
@@ -33,6 +31,12 @@
   --nav-border: rgba(0,0,0,0.08);
   --nav-shadow: 0 8px 24px rgba(0, 0, 0, .08);
   --nav-blur: 10px;
+
+  /* Button gradient stops (animated) */
+  --btn-from: var(--accent);
+  --btn-to: var(--buttons);
+  --btn-hover-from: var(--buttons);
+  --btn-hover-to: var(--accent);
 }
 
 /* Animate custom properties (for smooth gradient tween) */
@@ -52,23 +56,15 @@
 *::before,
 *::after { box-sizing: border-box; }
 
-html,
-body { height: 100%; margin: 0; }
-
-html,
-body { overflow-x: clip; }
-
-@supports not (overflow:clip) {
-  html, body { overflow-x: hidden; }
-}
-
-/* Keep horizontal centering stable when a vertical scrollbar appears */
+html, body { height: 100%; margin: 0; }
+html, body { overflow-x: clip; }
+@supports not (overflow:clip) { html, body { overflow-x: hidden; } }
 html { scrollbar-gutter: stable; }
 
 /* Center the app perfectly with CSS Grid */
 body {
   display: grid;
-  place-items: center;          /* centers both axes */
+  place-items: center;
   min-height: 100dvh;
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
@@ -118,15 +114,14 @@ nav a { margin-right: 1rem; }
 }
 
 .futuristic-card {
-  background: rgba(92, 27, 38, 0.97); /* deeper crimson tone, slightly translucent */
+  background: rgba(92, 27, 38, 0.97);
   border-radius: var(--radius);
   box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
-  color: #fff; /* switch to white text for contrast */
-  border: 1.5px solid #2e5cff;
+  color: #fff;
+  border: 1.5px solid #000000ff;
   backdrop-filter: blur(4px);
   display: flex;
 }
-
 
 .login-card {
   position: relative;
@@ -184,31 +179,34 @@ nav a { margin-right: 1rem; }
 .futuristic-link:hover { color: #ffffffff; }
 .futuristic-link:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 6px; }
 
-/* Button with smoothly-animated gradient */
+/* Unified gradient button (kept; flat button removed) */
 .btn {
-  --_from: var(--btn-from);
-  --_to: var(--btn-to);
   display: inline-block;
-  background: linear-gradient(90deg, var(--_from) 0%, var(--_to) 100%);
+  background: linear-gradient(90deg, var(--btn-from) 0%, var(--btn-to) 100%);
   color: #fff;
-  padding: .8em 2em;
+  padding: 0.8em 2em;
   border: none;
   border-radius: 2em;
   font-weight: 700;
   font-size: 1.1rem;
-  text-decoration: none;
-  box-shadow: 0 0 8px #2e5cff88;
   cursor: pointer;
-  transition: --btn-from .4s ease, --btn-to .4s ease, box-shadow .4s ease, transform .2s ease;
+  box-shadow: 0 0 8px #00000033;
+  transition:
+    --btn-from 0.4s ease,
+    --btn-to 0.4s ease,
+    box-shadow 0.4s ease,
+    transform 0.2s ease;
 }
 .btn:hover {
   --btn-from: var(--btn-hover-from);
   --btn-to: var(--btn-hover-to);
-  box-shadow: 0 0 16px #2e5cff99;
+  box-shadow: 0 0 16px #00000044;
   transform: translateY(-1px);
 }
-.btn:active { transform: translateY(0); box-shadow: 0 0 6px #2e5cff66 inset; }
-.btn:focus-visible { outline: none; box-shadow: var(--ring), 0 0 16px #2e5cff99; }
+.btn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 6px #00000033 inset;
+}
 
 /* =========================
    Futuristic Background
@@ -219,7 +217,6 @@ nav a { margin-right: 1rem; }
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
-  /* viewport-scaled base gradient + grain + vignette */
   --bg-grad: radial-gradient(140vw 120vh at 10% 10%, #070a12 20%, #0b1020 60%, #0a0f1c 100%);
   --grain: radial-gradient(circle, #ffffff0c 0 1px, transparent 1px);
   background-image:
@@ -229,13 +226,11 @@ nav a { margin-right: 1rem; }
   background-size: 100% 100%, 4px 4px, 3px 3px, 2px 2px, 100% 100%;
   background-blend-mode: normal, lighten, lighten, lighten, multiply;
 }
-
-/* animated aurora glow */
 .futuristic-bg::before,
 .futuristic-bg::after {
   content: "";
   position: absolute;
-  inset: -20vmax; /* overscan for 4K/ultrawide */
+  inset: -20vmax;
   filter: blur(60px) saturate(120%);
   mix-blend-mode: screen;
   opacity: .75;
@@ -261,15 +256,12 @@ nav a { margin-right: 1rem; }
    Navbar (GLOBAL)
    ========================= */
 .skip-link { position: absolute; left: -999px; top: -999px; }
-
-/* full-bleed wrapper */
 .full-bleed {
   position: sticky;
   top: 0;
-  width: 100%;           /* avoid 100vw to prevent scrollbar shift */
+  width: 100%;
   z-index: 9999;
 }
-
 .skip-link:focus {
   left: 1rem;
   top: 1rem;
@@ -280,7 +272,6 @@ nav a { margin-right: 1rem; }
   color: #fff;
   outline: 2px solid var(--accent);
 }
-
 .topbar {
   position: sticky;
   top: 0;
@@ -296,7 +287,6 @@ nav a { margin-right: 1rem; }
   -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(120%);
 }
 .topbar.scrolled { box-shadow: var(--nav-shadow); }
-
 .brand {
   text-decoration: none;
   color: #fff;
@@ -304,7 +294,6 @@ nav a { margin-right: 1rem; }
   letter-spacing: .2px;
   white-space: nowrap;
 }
-
 .nav-toggle {
   margin-left: auto;
   display: none;
@@ -323,7 +312,6 @@ nav a { margin-right: 1rem; }
   background: #dbe7ff;
   margin: 4px auto;
 }
-
 .topnav {
   margin-left: auto;
   display: flex;
@@ -355,13 +343,11 @@ nav a { margin-right: 1rem; }
    ========================= */
 @media (max-width:860px) {
   .topbar { grid-template-columns: 1fr auto; }
-
   .nav-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-
   .topnav {
     position: absolute;
     left: 0; right: 0;
@@ -424,30 +410,22 @@ footer {
   .glow { font-size: 1.9rem; }
 }
 
-/* In style.css, near your other globals */
-
-/* Inputs */
+/* =========================
+   Form inputs
+   ========================= */
 .input {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--accent-glow);
   border-radius: 0.5rem;
-  color: var(--text);
+  color: var(--fg);
   padding: 0.6rem 0.8rem;
   font-size: 1rem;
 }
-.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0.5rem var(--accent-glow); }
-
-/* Buttons */
-.btn {
-  background: var(--accent);
-  color: white;
-  font-weight: 600;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  transition: background 0.2s ease;
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0.5rem var(--accent-glow);
 }
-.btn:hover { background: var(--accent-hover); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Help/error text */
 .help-text { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
@@ -470,9 +448,9 @@ footer {
 
 /* Chat window */
 .chat-window {
-  flex-grow: 1;           /* fills remaining vertical space */
-  overflow-y: auto;       /* enables scrolling */
+  flex-grow: 1;
+  overflow-y: auto;
   padding: 1rem;
-  background: #ffffffff;
+  background: #ffffffff; /* 8-digit hex (opaque white) */
   border-radius: 0.75rem;
 }

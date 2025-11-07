@@ -6,67 +6,59 @@ function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [connected, setConnected] = useState(false);
-
   const socketRef = useRef<WebSocket | null>(null);
-useEffect(() => {
-  const token =
-    localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
-  if (!token) {
-    console.error("No auth token found");
-    return;
-  }
 
-  const wsUrl = `wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1?token=${encodeURIComponent(
-    token
-  )}`;
-  const socket = new WebSocket(wsUrl);
-  socketRef.current = socket;
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
+    if (!token) {
+      console.error("No auth token found");
+      return;
+    }
 
-  socket.onopen = () => {
-    setConnected(true);
-    setMessages((prev) => [...prev, "Connected"]);
+    const wsUrl = `wss://rnlcph5bha.execute-api.us-east-1.amazonaws.com/prodv1?token=${encodeURIComponent(
+      token
+    )}`;
+    const socket = new WebSocket(wsUrl);
+    socketRef.current = socket;
 
-    // ✅ Send blank message immediately on connect
-    const initPayload = JSON.stringify({
-      action: "sendMessage",
-      text: "Start Session",
-    });
-    console.log("Sending init payload:", initPayload);
-    socket.send(initPayload);
-  };
+    socket.onopen = () => {
+      setConnected(true);
+      // ✅ Post connected notice, then bot greeting
+      setMessages([
+        "System: Connected",
+        "Bot: Hello! How can I assist you with your car preferences today?",
+      ]);
+      console.log("WebSocket connected.");
+    };
 
-  socket.onmessage = (event) => {
-    const responseBody = JSON.parse(event.data);
-    setMessages((prev) => [...prev, "Bot: " + responseBody.reply]);
-  };
+    socket.onmessage = (event) => {
+      const responseBody = JSON.parse(event.data);
+      setMessages((prev) => [...prev, "Bot: " + responseBody.reply]);
+    };
 
-  socket.onclose = () => {
-    setConnected(false);
-    setMessages((prev) => [...prev, "....Disconnected"]);
-  };
+    socket.onclose = () => {
+      setConnected(false);
+      setMessages((prev) => [...prev, "System: Disconnected"]);
+    };
 
-  socket.onerror = (err) => {
-    setMessages((prev) => [...prev, "...WebSocket error"]);
-    console.error("WebSocket error:", err);
-  };
+    socket.onerror = (err) => {
+      setMessages((prev) => [...prev, "System: WebSocket error"]);
+      console.error("WebSocket error:", err);
+    };
 
-  return () => {
-    socket.close();
-  };
-}, []);
+    return () => {
+      socket.close();
+    };
+  }, []);
 
-  // --- Send message handler ---
   const sendMessage = () => {
-    console.log("sending message");
     if (socketRef.current && connected && input.trim() !== "") {
-          console.log("stringifying payload");
       const payload = JSON.stringify({
         action: "sendMessage",
         text: input.trim(),
       });
-      console.log(payload);
       socketRef.current.send(payload);
-
       setMessages((prev) => [...prev, "User: " + input.trim()]);
       setInput("");
     }
@@ -77,22 +69,24 @@ useEffect(() => {
       {/* Background */}
       <div className="futuristic-bg" aria-hidden="true" />
 
-      <section className="card futuristic-card max-w-md mx-auto">
-        <h1 className="glow">Car Suggestion Tool</h1>
+      <section className="card futuristic-card max-w-[1200px] w-[90%] h-[90vh] flex flex-col">
+        <h1 className="glow mb-3 text-center text-3xl">
+          Car Suggestion Tool
+        </h1>
 
         {/* Chat window */}
-        <div className="chat-window border rounded p-2 h-64 overflow-y-auto text-left bg-black/30 text-black">
+        <div className="chat-window flex-1 border rounded p-4 overflow-y-auto bg-black/30 text-black text-lg">
           {messages.map((msg, i) => (
-            <div key={i} className="mb-1">
+            <div key={i} className="mb-2">
               {msg}
             </div>
           ))}
         </div>
 
         {/* Input + send button */}
-        <div className="flex mt-2 gap-2">
+        <div className="flex mt-3 gap-3">
           <input
-            className="input flex-1"
+            className="input flex-1 text-lg"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -101,7 +95,7 @@ useEffect(() => {
             disabled={!connected}
           />
           <button
-            className="btn"
+            className="btn px-6 text-lg"
             type="button"
             onClick={sendMessage}
             disabled={!connected}
@@ -110,13 +104,12 @@ useEffect(() => {
           </button>
         </div>
 
-        <div className="divider" role="separator" aria-hidden="true" />
+        <div className="divider mt-2" role="separator" aria-hidden="true" />
       </section>
     </>
   );
 }
 
-// Mount
 createRoot(document.getElementById("app")!).render(<App />);
 
 export default App;

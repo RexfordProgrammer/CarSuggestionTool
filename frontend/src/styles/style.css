@@ -35,14 +35,12 @@
   --nav-blur: 10px;
 }
 
-
 /* Animate custom properties (for smooth gradient tween) */
 @property --btn-from {
   syntax: '<color>';
   inherits: true;
   initial-value: #232b5d;
 }
-
 @property --btn-to {
   syntax: '<color>';
   inherits: true;
@@ -52,30 +50,27 @@
 /* Box sizing + sensible defaults */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
 html,
-body {
-  height: 100%;
-  margin: 0;
-}
+body { height: 100%; margin: 0; }
 
 html,
-body {
-  overflow-x: clip;
-}
+body { overflow-x: clip; }
 
 @supports not (overflow:clip) {
-
-  html,
-  body {
-    overflow-x: hidden;
-  }
+  html, body { overflow-x: hidden; }
 }
 
+/* Keep horizontal centering stable when a vertical scrollbar appears */
+html { scrollbar-gutter: stable; }
+
+/* Center the app perfectly with CSS Grid */
 body {
+  display: grid;
+  place-items: center;          /* centers both axes */
+  min-height: 100dvh;
+  margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
   line-height: 1.55;
   background: var(--bg);
@@ -85,28 +80,14 @@ body {
 }
 
 /* Keep the app’s stacking context sane */
-#app {
-  position: relative;
-  isolation: isolate;
-}
+#app { position: relative; isolation: isolate; }
 
 /* =========================
    Typography & Links
    ========================= */
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-a:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-  border-radius: 8px;
-}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 8px; }
 
 code {
   background: rgba(255, 255, 255, .08);
@@ -117,14 +98,8 @@ code {
 /* =========================
    Layout & Containers
    ========================= */
-header,
-footer {
-  padding: 1rem 0;
-}
-
-nav a {
-  margin-right: 1rem;
-}
+header, footer { padding: 1rem 0; }
+nav a { margin-right: 1rem; }
 
 .container {
   max-width: 900px;
@@ -142,19 +117,19 @@ nav a {
   box-shadow: var(--shadow-lg);
 }
 
+/* Centered, responsive app card */
 .futuristic-card {
-  position: relative;
-  z-index: 1;
-  margin: 8vh auto;
-  max-width: 420px;
-  background: rgba(15, 18, 34, .97);
+  /* width: min(1200px, 90dvw);
+  height: min(900px, 90dvh); */
+  background: rgba(15, 18, 34, 0.97);
   border-radius: var(--radius);
   box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
-  padding: 2.5rem 2rem 2rem;
-  text-align: center;
-  color: #000000ff;
+  /* padding: 2.5rem 2rem 2rem; */
+  color: #000;
   border: 1.5px solid #2e5cff;
   backdrop-filter: blur(4px);
+  display: flex;
+  /* flex-direction: column; */
 }
 
 .login-card {
@@ -180,19 +155,13 @@ nav a {
   margin-bottom: .2em;
   text-shadow: 0 0 12px #000, 0 0 32px #00000055;
 }
-
 .subtitle {
   color: #fff;
   font-weight: 600;
   margin-bottom: 1.2em;
   text-shadow: 0 0 8px #00000088;
 }
-
-.intro {
-  font-size: 1.1rem;
-  margin-bottom: 1.5em;
-}
-
+.intro { font-size: 1.1rem; margin-bottom: 1.5em; }
 .tagline {
   display: block;
   margin-top: 1em;
@@ -211,22 +180,13 @@ nav a {
   justify-content: center;
   gap: 1.5em;
 }
-
 .futuristic-link {
   color: #3d63efff;
   text-decoration: underline;
   transition: color .2s ease;
 }
-
-.futuristic-link:hover {
-  color: #ffffffff;
-}
-
-.futuristic-link:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-  border-radius: 6px;
-}
+.futuristic-link:hover { color: #ffffffff; }
+.futuristic-link:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 6px; }
 
 /* Button with smoothly-animated gradient */
 .btn {
@@ -245,28 +205,18 @@ nav a {
   cursor: pointer;
   transition: --btn-from .4s ease, --btn-to .4s ease, box-shadow .4s ease, transform .2s ease;
 }
-
 .btn:hover {
   --btn-from: var(--btn-hover-from);
   --btn-to: var(--btn-hover-to);
   box-shadow: 0 0 16px #2e5cff99;
   transform: translateY(-1px);
 }
-
-.btn:active {
-  transform: translateY(0);
-  box-shadow: 0 0 6px #2e5cff66 inset;
-}
-
-.btn:focus-visible {
-  outline: none;
-  box-shadow: var(--ring), 0 0 16px #2e5cff99;
-}
+.btn:active { transform: translateY(0); box-shadow: 0 0 6px #2e5cff66 inset; }
+.btn:focus-visible { outline: none; box-shadow: var(--ring), 0 0 16px #2e5cff99; }
 
 /* =========================
    Futuristic Background
    ========================= */
-/* Make the bg sit behind everything */
 .futuristic-bg {
   position: fixed;
   inset: 0;
@@ -289,18 +239,15 @@ nav a {
 .futuristic-bg::after {
   content: "";
   position: absolute;
-  inset: -20vmax;
-  /* overscan for 4K/ultrawide */
+  inset: -20vmax; /* overscan for 4K/ultrawide */
   filter: blur(60px) saturate(120%);
   mix-blend-mode: screen;
   opacity: .75;
 }
-
 .futuristic-bg::before {
   background: conic-gradient(from var(--angle, 0deg) at 30% 40%, #bbd8ed, #ffffff55, #832b30, #bbd8ed);
   animation: rotate 32s linear infinite, drift 18s ease-in-out infinite alternate;
 }
-
 .futuristic-bg::after {
   background:
     radial-gradient(45% 45% at 70% 60%, #bbd8ed 0%, transparent 60%),
@@ -308,21 +255,10 @@ nav a {
     radial-gradient(60% 60% at 80% 20%, #e1e9f4 0%, transparent 60%);
   animation: drift 26s ease-in-out infinite alternate;
 }
-
-@keyframes rotate {
-  to {
-    --angle: 360deg;
-  }
-}
-
+@keyframes rotate { to { --angle: 360deg; } }
 @keyframes drift {
-  0% {
-    transform: translate3d(-2%, -1%, 0) scale(1.05);
-  }
-
-  100% {
-    transform: translate3d(2%, 1%, 0) scale(1.1);
-  }
+  0% { transform: translate3d(-2%, -1%, 0) scale(1.05); }
+  100% { transform: translate3d(2%, 1%, 0) scale(1.1); }
 }
 
 /* Optional: tasteful glass for your card */
@@ -336,26 +272,14 @@ nav a {
 /* =========================
    Navbar (GLOBAL)
    ========================= */
-.skip-link {
-  position: absolute;
-  left: -999px;
-  top: -999px;
-}
+.skip-link { position: absolute; left: -999px; top: -999px; }
 
-/* full-bleed wrapper that ignores any centered page container */
+/* full-bleed wrapper */
 .full-bleed {
   position: sticky;
-  /* nice: stays at top */
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100vw;
+  width: 100%;           /* avoid 100vw to prevent scrollbar shift */
   z-index: 9999;
-}
-
-/* ensure the bar itself expands */
-.full-bleed .topbar {
-  width: 100%;
 }
 
 .skip-link:focus {
@@ -383,10 +307,7 @@ nav a {
   backdrop-filter: blur(var(--nav-blur)) saturate(120%);
   -webkit-backdrop-filter: blur(var(--nav-blur)) saturate(120%);
 }
-
-.topbar.scrolled {
-  box-shadow: var(--nav-shadow);
-}
+.topbar.scrolled { box-shadow: var(--nav-shadow); }
 
 .brand {
   text-decoration: none;
@@ -406,11 +327,7 @@ nav a {
   background: transparent;
   cursor: pointer;
 }
-
-.nav-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-}
-
+.nav-toggle:focus-visible { outline: 2px solid var(--accent); }
 .nav-toggle .bar {
   display: block;
   width: 20px;
@@ -426,7 +343,6 @@ nav a {
   align-items: center;
   max-width: var(--nav-maxw);
 }
-
 .topnav-link {
   display: inline-block;
   padding: .45rem .75rem;
@@ -436,12 +352,10 @@ nav a {
   border: 1px solid transparent;
   transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
 }
-
 .topnav-link:hover {
   border-color: color-mix(in oklab, var(--accent) 60%, transparent);
   background: color-mix(in oklab, var(--accent) 12%, transparent);
 }
-
 .topnav-link.active {
   color: #fff;
   border-color: color-mix(in oklab, var(--accent) 70%, transparent);
@@ -452,9 +366,7 @@ nav a {
    Responsive Nav
    ========================= */
 @media (max-width:860px) {
-  .topbar {
-    grid-template-columns: 1fr auto;
-  }
+  .topbar { grid-template-columns: 1fr auto; }
 
   .nav-toggle {
     display: inline-flex;
@@ -464,8 +376,7 @@ nav a {
 
   .topnav {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 0; right: 0;
     top: var(--nav-h);
     display: grid;
     gap: .5rem;
@@ -479,7 +390,6 @@ nav a {
     pointer-events: none;
     transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
   }
-
   .topnav.open {
     opacity: 1;
     visibility: visible;
@@ -487,10 +397,7 @@ nav a {
     transform: scaleY(1);
     transition: opacity .18s ease, transform .18s ease;
   }
-
-  .topnav-link {
-    padding: .6rem .75rem;
-  }
+  .topnav-link { padding: .6rem .75rem; }
 }
 
 /* =========================
@@ -506,10 +413,7 @@ footer {
 /* =========================
    Project media
    ========================= */
-.project-figure {
-  margin: 0 0 .75rem;
-}
-
+.project-figure { margin: 0 0 .75rem; }
 .project-img {
   display: block;
   width: 100%;
@@ -525,13 +429,11 @@ footer {
    ========================= */
 @media (max-width:480px) {
   .futuristic-card {
-    margin: 6vh 1rem;
+    width: 94dvw;
+    height: 92dvh;
     padding: 2rem 1.25rem 1.5rem;
   }
-
-  .glow {
-    font-size: 1.9rem;
-  }
+  .glow { font-size: 1.9rem; }
 }
 
 /* In style.css, near your other globals */
@@ -545,12 +447,7 @@ footer {
   padding: 0.6rem 0.8rem;
   font-size: 1rem;
 }
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0.5rem var(--accent-glow);
-}
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0.5rem var(--accent-glow); }
 
 /* Buttons */
 .btn {
@@ -565,11 +462,7 @@ footer {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Help/error text */
-.help-text {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 0.25rem;
-}
+.help-text { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
 .alert.error {
   background: rgba(255,0,60,0.15);
   border: 1px solid red;
@@ -579,25 +472,18 @@ footer {
   margin-top: 0.5rem;
 }
 
-
-
 /* =========================
    Accessibility & Motion
    ========================= */
-:focus-visible {
-  outline: none;
-}
-
+:focus-visible { outline: none; }
 @media (prefers-reduced-motion:reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
+  * { animation: none !important; transition: none !important; }
 }
 
+/* Chat window */
 .chat-window {
-  height: 400px;         /* or flex-grow for full height */
-  overflow-y: auto;      /* enables scrolling */
+  flex-grow: 1;           /* fills remaining vertical space */
+  overflow-y: auto;       /* enables scrolling */
   padding: 1rem;
   background: #ffffffff;
   border-radius: 0.75rem;

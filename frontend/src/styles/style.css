@@ -117,20 +117,16 @@ nav a { margin-right: 1rem; }
   box-shadow: var(--shadow-lg);
 }
 
-/* Centered, responsive app card */
 .futuristic-card {
-  /* width: min(1200px, 90dvw);
-  height: min(900px, 90dvh); */
-  background: rgba(15, 18, 34, 0.97);
+  background: rgba(92, 27, 38, 0.97); /* deeper crimson tone, slightly translucent */
   border-radius: var(--radius);
   box-shadow: 0 0 32px #ffffff44, 0 0 8px #ffffff33;
-  /* padding: 2.5rem 2rem 2rem; */
-  color: #000;
+  color: #fff; /* switch to white text for contrast */
   border: 1.5px solid #2e5cff;
   backdrop-filter: blur(4px);
   display: flex;
-  /* flex-direction: column; */
 }
+
 
 .login-card {
   position: relative;
@@ -259,14 +255,6 @@ nav a { margin-right: 1rem; }
 @keyframes drift {
   0% { transform: translate3d(-2%, -1%, 0) scale(1.05); }
   100% { transform: translate3d(2%, 1%, 0) scale(1.1); }
-}
-
-/* Optional: tasteful glass for your card */
-.card.futuristic-card {
-  background: color-mix(in oklab, #2b050cff 75%, #ffffff 10%);
-  border: 1px solid #ffffff1a;
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
 }
 
 /* =========================

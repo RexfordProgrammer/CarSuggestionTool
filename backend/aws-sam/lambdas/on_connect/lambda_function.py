@@ -3,7 +3,6 @@ import jwt
 import os
 import boto3
 from dynamo_db_helpers import initialize_session_messages
-# Cache the secret so we don’t call Secrets Manager on every request
 _cached_secret = None
 
 def get_jwt_secret():
@@ -35,7 +34,7 @@ def lambda_handler(event, context):
         secret = get_jwt_secret()
         decoded = jwt.decode(token, secret, algorithms=["HS256"])
         print("JWT valid:", decoded)
-        return {"statusCode": 200}  # accept connection
+        return {"statusCode": 200}
     except jwt.ExpiredSignatureError:
         print("JWT expired")
         return {"statusCode": 401, "body": "Token expired"}

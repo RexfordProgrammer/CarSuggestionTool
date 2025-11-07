@@ -2,7 +2,7 @@ import json
 import jwt
 import os
 import boto3
-
+from dynamo_db_helpers import initialize_session_messages
 # Cache the secret so we don’t call Secrets Manager on every request
 _cached_secret = None
 
@@ -22,7 +22,8 @@ def get_jwt_secret():
 
 def lambda_handler(event, context):
     print("Connect event:", json.dumps(event))
-
+    connection_id = event["requestContext"]["connectionId"]
+    initialize_session_messages(connection_id)
     token = None
     if "queryStringParameters" in event and event["queryStringParameters"]:
         token = event["queryStringParameters"].get("token")

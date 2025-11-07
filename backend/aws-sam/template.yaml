@@ -29,8 +29,7 @@ Resources:
       CodeUri: lambdas/on_connect/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
-      Layers:
-        - !Ref SharedHelpersLayer
+
 
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
@@ -39,8 +38,7 @@ Resources:
       CodeUri: lambdas/on_disconnect/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
-      Layers:
-        - !Ref SharedHelpersLayer
+
 
   OnDefaultFunction:
     Type: AWS::Serverless::Function
@@ -49,8 +47,7 @@ Resources:
       CodeUri: lambdas/on_default/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
-      Layers:
-        - !Ref SharedHelpersLayer
+
 
   OnLoginFunction:
     Type: AWS::Serverless::Function
@@ -59,8 +56,7 @@ Resources:
       CodeUri: lambdas/on_login/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
-      Layers:
-        - !Ref SharedHelpersLayer
+
 
   OnSendMessageFunction:
     Type: AWS::Serverless::Function
@@ -69,5 +65,13 @@ Resources:
       CodeUri: lambdas/on_send_message/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
-      Layers:
-        - !Ref SharedHelpersLayer
+
+
+
+  OnSendMessageV3Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_send_message_v3
+      CodeUri: lambdas/on_send_message_v3/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd

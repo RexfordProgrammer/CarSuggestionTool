@@ -2,37 +2,13 @@ import re
 from bedrock_caller import call_bedrock
 from typing import List, Literal
 from pydantic import BaseModel, ValidationError
+from target_flags import get_target_flags
 
-TARGET_FLAGS = ["number_of_seats"]
 TRIGGER_LINE = "Hold on while we gather those recommendations for you..."
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
-
-
-# # === Keyword detection ===
-# KEYWORDS_RECO = re.compile(
-#     r"\b(recommend|reccomend|suggest|what (?:car|vehicle) should I|get|show.+cars?)\b",
-#     re.IGNORECASE
-# )
-
-# def _wants_recommendations(validated_messages: List[ChatMessage]) -> bool:
-#     """Detect whether the user's last message asked for car recommendations."""
-#     for msg in reversed(validated_messages):
-#         if msg.role == "user":
-#             return bool(KEYWORDS_RECO.search(msg.content))
-#     return False
-
-# def _enforce_trigger(text: str) -> str:
-#     """Guarantee the system trigger line appears exactly once at the end."""
-#     idx = text.lower().rfind(TRIGGER_LINE.lower())
-#     if idx != -1:
-#         return text[: idx + len(TRIGGER_LINE)]
-#     text = text.rstrip()
-#     if text and not text.endswith((".", "!", "?")):
-#         text += "."
-#     return f"{text}\n{TRIGGER_LINE}"
 
 
 def get_conversational_response(connection_id: str) -> str:
@@ -47,41 +23,29 @@ def get_conversational_response(connection_id: str) -> str:
         except ValidationError:
             continue
 
-    flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
+    flags_str = ", ".join(f'"{f}"' for f in get_target_flags())
 
     system_prompt = (
         "You are an intelligent assistant embedded in a car suggestion tool. "
         "Your job is to respond conversationally — never in JSON, XML, YAML, or code format. "
-        "Do not produce or reference <tool_calls>, <function_calls>, or any structured data. "
-        "Always reply using plain natural language sentences only. "
+        "When you intend to show vehicles or generate recommendations, request the tool "
+        "'fetch_user_preferences' first to gather or confirm the user's car preferences. "
+        "You must still speak to the user in plain natural language. "
         "Focus on extracting car preferences and guiding the user toward concrete details "
         f"such as {flags_str}, brand, budget, and body style. "
-        "Avoid open-ended questions; when clarification is needed, ask one short, specific question "
-        "that helps you collect a missing attribute (e.g., 'Do you prefer SUVs or sedans?'). "
+        "Avoid open-ended questions; when clarification is needed, ask one short, specific question. "
         "Never output lists, schemas, or data structures. "
         "Keep all responses under three sentences. "
         "When the user asks for car recommendations or expresses intent to be shown vehicles, "
         "you MUST end your message with the exact phrase:\n\n"
         f"{TRIGGER_LINE}\n\n"
         "Make sure that phrase is the final line of your reply. "
-        "Do not add any text, punctuation, or commentary after it. "
         "If the user is not asking for car recommendations, guide the conversation toward "
         "specific details in a conversational way — not general discussion."
     )
 
-
-
     print(f"Calling Bedrock for connection {connection_id} with system prompt:\n{system_prompt}\n")
-
-    # if _wants_recommendations(validated_messages):
-    #     print("Detected recommendation intent — overriding model output.")
-    #     return TRIGGER_LINE
-
-    # Otherwise, call Bedrock as usual
+    
     reply = call_bedrock(connection_id, system_prompt)
-
-    # # Just in case model partially follows the rule, enforce ending
-    # if _wants_recommendations(validated_messages):
-    #     return _enforce_trigger(reply)
-
+    
     return reply or "(no reply from model)"

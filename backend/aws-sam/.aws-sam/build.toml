@@ -45,4 +45,13 @@ manifest_hash = "0eb75e85cb201492a0fa9ff7e8cf2deb"
 packagetype = "Zip"
 functions = ["OnSendMessageFunction"]
 
+[function_build_definitions.7dd0c51e-c056-4461-92f7-fba785510261]
+codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\lambdas\\on_send_message_v3"
+runtime = "python3.12"
+architecture = "x86_64"
+handler = "lambda_function.lambda_handler"
+manifest_hash = "0eb75e85cb201492a0fa9ff7e8cf2deb"
+packagetype = "Zip"
+functions = ["OnSendMessageV3Function"]
+
 [layer_build_definitions]

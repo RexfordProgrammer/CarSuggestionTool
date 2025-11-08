@@ -1,5 +1,5 @@
 # tools/fetch_nhtsa_cars.py
-import os, json, boto3, requests
+import requests
 from typing import Dict, List, Any
 
 SPEC = {

@@ -1,5 +1,5 @@
 # tools/fetch_fuel_economy.py
-import requests, json
+import requests
 from typing import Dict, List, Any
 
 SPEC = {

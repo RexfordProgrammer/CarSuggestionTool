@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 
 from dynamo_db_helpers import get_session_messages, save_bot_response
 from tools import tool_specs, dispatch
-from target_flags import get_target_flags  # optional, for prompt guidance
+from target_flags import get_target_flags
 
 ORCHESTRATOR_MODEL = os.getenv("MASTER_MODEL", "ai21.jamba-1-5-large-v1:0")
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
@@ -50,7 +50,7 @@ def _build_system_prompt(base_prompt: str, specs: List[Dict[str, Any]]) -> str:
 def call_bedrock(connection_id: str, base_system_prompt: str) -> str:
     """Run the tool-aware Converse flow with proper toolResult handling."""
     # Gather tool specs and wrap with {"toolSpec": ...}
-    specs = tool_specs()  # returns list of inner toolSpec dicts
+    specs = tool_specs() 
     tool_config = {"tools": [{"toolSpec": s} for s in specs]}
     allowed_names = [s.get("name") for s in specs]
 

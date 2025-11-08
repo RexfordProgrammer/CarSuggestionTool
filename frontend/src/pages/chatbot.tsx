@@ -27,7 +27,6 @@ function App() {
       // ✅ Post connected notice, then bot greeting
       setMessages([
         "System: Connected",
-        "Bot: Hi there! Are you looking for help with choosing a car?",
       ]);
       console.log("WebSocket connected.");
     };

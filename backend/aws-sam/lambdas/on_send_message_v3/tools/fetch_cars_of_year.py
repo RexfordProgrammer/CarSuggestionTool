@@ -65,3 +65,6 @@ def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
 
     # Return formatted JSON for orchestration
     return [{"json": {"year": year, "count": len(cars), "vehicles": cars[:100]}}]
+
+
+    

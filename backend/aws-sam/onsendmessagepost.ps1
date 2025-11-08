@@ -1,4 +1,4 @@
 Set-Location $PSScriptRoot
 
-sam build OnSendMessageFunction
+sam build OnSendMessageFunctionV3
 sam deploy

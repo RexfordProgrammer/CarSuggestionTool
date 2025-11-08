@@ -46,20 +46,19 @@ def _build_system_prompt(base_prompt: str, specs: List[Dict[str, Any]]) -> str:
         "Always integrate tool results into a concise, natural 2–3 sentence reply."
     )
 
-
 def call_bedrock(connection_id: str, base_system_prompt: str) -> str:
-    """Run the tool-aware Converse flow with proper toolResult handling."""
-    # Gather tool specs and wrap with {"toolSpec": ...}
-    specs = tool_specs() 
+    """Run the tool-aware Bedrock Converse flow with multi-tool handling and validation fixes."""
+    # === Build Tool Configuration ===
+    specs = tool_specs()
     tool_config = {"tools": [{"toolSpec": s} for s in specs]}
     allowed_names = [s.get("name") for s in specs]
 
-    # Build system + history
+    # === Build Prompts & History ===
     system_prompt = _build_system_prompt(base_system_prompt, specs)
     system = [{"text": system_prompt}]
     messages = _build_history_messages(connection_id)
 
-    # First Converse call (model may emit toolUse)
+    # === 1️⃣ First Converse Call ===
     resp = bedrock.converse(
         modelId=ORCHESTRATOR_MODEL,
         system=system,
@@ -72,46 +71,63 @@ def call_bedrock(connection_id: str, base_system_prompt: str) -> str:
     content = out_msg.get("content") or []
     tool_uses = [c.get("toolUse") for c in content if "toolUse" in c]
 
-    # If no toolUse blocks, return first text
+    # === If no tools requested → return normal text reply ===
     if not tool_uses:
         texts = [c.get("text") for c in content if "text" in c]
         reply = (texts[0] if texts else "(no output)").strip()
         save_bot_response(reply, connection_id)
         return reply
 
-    # Otherwise, execute each tool and provide toolResult messages
+    # === 2️⃣ If tools requested → execute all tools ===
     messages_plus: List[Dict[str, Any]] = messages + [{"role": "assistant", "content": content}]
+    tool_results_content: List[Dict[str, Any]] = []
+
     for tu in tool_uses:
         name = tu.get("name")
         use_id = tu.get("toolUseId")
         tool_input = tu.get("input") or {}
 
+        print(f"[ToolUse] {name} (ID: {use_id}) Input: {json.dumps(tool_input)}")
+
         status = "success"
         try:
             if name not in allowed_names:
-                result_content = [{"text": f"Invalid tool '{name}'. Allowed: {', '.join(allowed_names) or '(none)'}"}]
                 status = "error"
+                result_content = [{
+                    "text": f"Invalid tool '{name}'. Allowed: {', '.join(allowed_names)}"
+                }]
             else:
+                # Dispatch the tool handler
                 result_content = dispatch(name, connection_id, tool_input)
                 if not isinstance(result_content, list):
-                    result_content = [{"json": result_content}]
+                    # Wrap plain dicts or strings properly
+                    if isinstance(result_content, dict):
+                        result_content = [{"json": result_content}]
+                    elif isinstance(result_content, str):
+                        result_content = [{"text": result_content}]
+                    else:
+                        result_content = [{"text": str(result_content)}]
         except Exception as e:
-            result_content = [{"text": f"Tool '{name}' failed: {e}"}]
             status = "error"
+            result_content = [{"text": f"Tool '{name}' failed: {e}"}]
 
-        # ✅ Fixed: include required status + ensure content is valid array of message parts
-        messages_plus.append({
-            "role": "user",
-            "content": [{
-                "toolResult": {
-                    "toolUseId": use_id,
-                    "status": status,
-                    "content": result_content or [{"text": "(no content)"}],
-                }
-            }]
+        # ✅ Collect this tool's result for the combined user message
+        tool_results_content.append({
+            "toolResult": {
+                "toolUseId": use_id,
+                "status": status,
+                "content": result_content or [{"text": "(no content)"}],
+            }
         })
 
-    # Second Converse call to turn tool results into final NL reply
+    # === Append ONE combined user message with all toolResults ===
+    messages_plus.append({
+        "role": "user",
+        "content": tool_results_content
+    })
+
+    # === 3️⃣ Second Converse Call (Final NL reply) ===
+    print("[Follow-up] Sending tool results back to model...")
     resp2 = bedrock.converse(
         modelId=ORCHESTRATOR_MODEL,
         system=system,
@@ -119,10 +135,12 @@ def call_bedrock(connection_id: str, base_system_prompt: str) -> str:
         toolConfig=tool_config,
         inferenceConfig={"temperature": 0.5},
     )
+
     out_msg2 = (resp2.get("output") or {}).get("message") or {}
     content2 = out_msg2.get("content") or []
-
     texts = [c.get("text") for c in content2 if "text" in c]
     reply = (texts[0] if texts else "(no output)").strip()
+
     save_bot_response(reply, connection_id)
     return reply
+

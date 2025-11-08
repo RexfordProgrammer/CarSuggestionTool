@@ -11,17 +11,6 @@ Globals:
     MemorySize: 256
 
 Resources:
-  # Shared Python Layer for all helper files 
-  SharedHelpersLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: shared_helpers_v2
-      ContentUri: layers/shared_helpers/
-      CompatibleRuntimes:
-        - python3.12
-      RetentionPolicy: Delete
-
-  # === Lambda Functions ===
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:

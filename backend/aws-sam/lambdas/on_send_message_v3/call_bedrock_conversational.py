@@ -66,10 +66,13 @@ def get_conversational_response(connection_id: str) -> str:
     flags_str = ", ".join(f'"{f}"' for f in get_target_flags())
     system_prompt = (
         "You are an intelligent assistant embedded in a car suggestion tool. "
-        "Speak naturally with the user. You may call tools when needed. "
-        f"When a user asks for car recommendations or wants to view vehicles, call the 'fetch_user_preferences' tool "
-        f"to gather or confirm details such as {flags_str}, brand, budget, and body style. "
-        "After tool results are provided, integrate them into a concise, friendly reply (2–3 sentences)."
+        "Speak naturally with the user. You may call tools when needed.\n\n"
+        "Use these tools as appropriate:\n"
+        "- `fetch_user_preferences`: to identify the user’s desired car attributes such as seats, budget, and brand.\n"
+        "- `fetch_cars_of_year`: to list all available cars for a given model year.\n"
+        "- `fetch_safety_rating`: to retrieve NHTSA safety ratings for a make, model, and year.\n"
+        "- `fetch_gas_milage`: to retrieve fuel economy data for a given vehicle.\n\n"
+        "Combine tool outputs to give personalized, accurate car recommendations."
     )
 
     system = [{"text": system_prompt}]

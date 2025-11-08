@@ -13,22 +13,52 @@ from dynamo_db_helpers import (
 from tools import tool_specs, dispatch
 from target_flags import get_target_flags
 
+
+from decimal import Decimal
+
+def _json_safe(x):
+    if isinstance(x, Decimal):
+        return float(x)
+    if isinstance(x, dict):
+        return {k: _json_safe(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_json_safe(v) for v in x]
+    return x
+
+
 ORCHESTRATOR_MODEL = os.getenv("MASTER_MODEL", "ai21.jamba-1-5-large-v1:0")
 bedrock = boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
 
-# Final-answer token contract
-DONE_RE = re.compile(r"(?:^|\n)\s*<\|DONE\|>\s*$", re.IGNORECASE)
+# === Cleanup helpers ===
 
+# Full-line and inline DONE token stripping
+DONE_LINE_RE   = re.compile(r"(?:^|\n)\s*<\|DONE\|>\s*$", re.IGNORECASE)
+DONE_INLINE_RE = re.compile(r"\s*<\|DONE\|>\s*", re.IGNORECASE)
 
-# ------------------------
-# Helpers
-# ------------------------
+# Heuristic to spot/strip any tool markup that sneaks into assistant text
+TOOL_MARKUP_RE = re.compile(
+    r"(?:</?tool_calls>|\"toolUse\"|\"arguments\"\s*:|<\|\s*tool_(?:call|result)\s*\|>)",
+    re.IGNORECASE | re.DOTALL,
+)
+
 def _strip_done(text: str) -> str:
-    return DONE_RE.sub("", text).strip()
+    if not text:
+        return ""
+    text = DONE_LINE_RE.sub("", text)
+    text = DONE_INLINE_RE.sub("", text)
+    return text.strip()
 
+def _strip_tool_markup(text: str) -> str:
+    if not text:
+        return ""
+    return TOOL_MARKUP_RE.sub("", text).strip()
+
+def _clean(text: str) -> str:
+    return _strip_done(_strip_tool_markup(text or ""))
+
+# === Message utilities ===
 
 def _build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
-    """Fetch prior chat and format messages for Bedrock Converse."""
     raw = get_session_messages(connection_id) or []
     msgs: List[Dict[str, Any]] = []
     for m in raw:
@@ -38,27 +68,19 @@ def _build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
             msgs.append({"role": role, "content": [{"text": content}]})
     return msgs
 
-
 def _last_role(messages: List[Dict[str, Any]]) -> Optional[str]:
     return messages[-1]["role"] if messages else None
 
-
 def _needs_continue_nudge(messages: List[Dict[str, Any]]) -> bool:
-    """
-    Only nudge when the last message is an assistant turn.
-    If the last turn is a user (including toolResult frames), the model already owes a reply.
-    """
+    # Only nudge when the last message is an assistant turn.
     return _last_role(messages) == "assistant"
 
-
 def _extract_text_chunks(content: List[Dict[str, Any]]) -> List[str]:
-    """Pull all textual chunks from a Bedrock message content list."""
     out: List[str] = []
     for c in content or []:
         if isinstance(c, dict) and "text" in c and c.get("text"):
             out.append(c["text"])
     return out
-
 
 def _extract_tool_uses(content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     uses: List[Dict[str, Any]] = []
@@ -67,16 +89,14 @@ def _extract_tool_uses(content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             uses.append(c["toolUse"])
     return uses
 
-
 def _allowed_tools() -> Dict[str, Any]:
     specs = tool_specs() or []
     tool_config = {"tools": [{"toolSpec": s} for s in specs]} if specs else None
     allowed_names = {s.get("name") for s in specs}
     return {"tool_config": tool_config, "allowed_names": allowed_names, "specs": specs}
 
-
 def _emit(text: str, connection_id: str, apigw) -> None:
-    """Send a piece of assistant text to the client and persist."""
+    text = (text or "").strip()
     if not text:
         return
     payload = {"type": "bedrock_reply", "reply": text}
@@ -86,13 +106,18 @@ def _emit(text: str, connection_id: str, apigw) -> None:
             Data=json.dumps(payload).encode("utf-8"),
         )
     except Exception:
-        # Best-effort emit; don't blow up the turn over socket blips
         pass
     save_bot_response(text, connection_id)
 
+def _join_clean(chunks: List[str]) -> str:
+    parts = []
+    for t in chunks or []:
+        t = _clean(t)
+        if t:
+            parts.append(t)
+    return "\n\n".join(parts).strip() or "(no output)"
 
 def _build_system_prompt(base_prompt: str, specs: List[Dict[str, Any]]) -> str:
-    """Inject tool list and agentic instructions (with final-token contract)."""
     flags_str = ", ".join(f'"{f}"' for f in get_target_flags())
     allowed_lines = [f"- `{s.get('name')}`: {s.get('description')}" for s in specs]
     allowed_block = "\n".join(allowed_lines) or "- (no tools available)"
@@ -101,7 +126,8 @@ def _build_system_prompt(base_prompt: str, specs: List[Dict[str, Any]]) -> str:
         f"{base_prompt}\n\n"
         "You are an autonomous car-recommendation assistant that may plan and execute several steps.\n"
         "Call tools only when needed. If you can answer from context, do so.\n"
-        "When your final answer is ready, end with the exact token <|DONE|> on its own line.\n\n"
+        "When your final answer is ready, do NOT include the token <|DONE|>.\n"
+        "Do not print or describe tool calls (no <tool_calls>, JSON, or arguments) — call tools silently.\n\n"
         "Available tools:\n"
         f"{allowed_block}\n\n"
         "Guidance:\n"
@@ -115,18 +141,54 @@ def _build_system_prompt(base_prompt: str, specs: List[Dict[str, Any]]) -> str:
         "- Use working memory to avoid redundant actions.\n"
     )
 
+def _status_from_tool_uses(tool_uses: List[Dict[str, Any]]) -> str:
+    """Make a friendly one-liner for the UI when tools run."""
+    parts: List[str] = []
+    for tu in tool_uses:
+        name = (tu.get("name") or "").strip()
+        inp = tu.get("input") or {}
+        if name == "fetch_safety_ratings":
+            y = inp.get("year"); mk = inp.get("make"); md = inp.get("model")
+            parts.append(f"Looking up NHTSA safety ratings for {y} {mk} {md}…")
+        elif name == "fetch_gas_milage":
+            y = inp.get("year"); mk = inp.get("make"); md = inp.get("model")
+            parts.append(f"Fetching fuel economy for {y} {mk} {md}…")
+        elif name == "fetch_cars_of_year":
+            y = inp.get("year")
+            parts.append(f"Collecting model list for {y}…")
+        elif name == "fetch_user_preferences":
+            parts.append("Analyzing your preferences so far…")
+        else:
+            parts.append("Working on that…")
+    return " ".join(p for p in parts if p) or "Working on that…"
 
-# ------------------------
-# Main Orchestrator
-# ------------------------
+def _should_fast_path(messages: List[Dict[str, Any]]) -> bool:
+    """Allow small-talk fast path only; never for safety/mpg/random-car intents."""
+    if not messages:
+        return False
+    try:
+        last_user_text = messages[-1]["content"][0]["text"]
+    except Exception:
+        return False
+    if not isinstance(last_user_text, str):
+        return False
+    q = last_user_text.lower().strip()
+
+    # Block fast-path for tool-worthy intents
+    blocked_terms = [
+        "safety", "rating", "ratings", "nhtsa",
+        "random car", "random vehicle",
+        "mpg", "fuel economy", "gas mileage",
+        "vin", "vehicle id",
+    ]
+    if any(term in q for term in blocked_terms):
+        return False
+
+    return len(messages) <= 2 and len(q) < 60
+
+# === Main entry ===
+
 def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
-    """
-    Hybrid orchestrator:
-      - Fast single-shot path for simple prompts (no tools, low latency)
-      - Agentic multi-turn mode for complex flow or when tools are required
-      - Streams assistant text to the UI (even during tool rounds)
-    Returns the final assistant reply (without the <|DONE|> token).
-    """
     tool_info = _allowed_tools()
     tool_config = tool_info["tool_config"]
     allowed_names = tool_info["allowed_names"]
@@ -135,13 +197,8 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
     system_prompt = _build_system_prompt(base_system_prompt, specs)
     messages = _build_history_messages(connection_id)
 
-    # ---------------- Fast path ----------------
-    try:
-        last_user_text = messages[-1]["content"][0]["text"] if messages else ""
-    except Exception:
-        last_user_text = ""
-
-    if (len(messages) <= 2 and isinstance(last_user_text, str) and len(last_user_text.strip()) < 60):
+    # ---- Fast path (strictly small-talk)
+    if _should_fast_path(messages):
         try:
             resp = bedrock.converse(
                 modelId=ORCHESTRATOR_MODEL,
@@ -151,18 +208,13 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
             )
             out_msg = (resp.get("output") or {}).get("message") or {}
             content = out_msg.get("content") or []
-            texts = _extract_text_chunks(content)
-            reply = "\n\n".join(t.strip() for t in texts if t) or "(no output)"
+            reply = _join_clean(_extract_text_chunks(content))
         except Exception as e:
             reply = f"Sorry—my model call hit an error: {e}"
-
-        if DONE_RE.search(reply):
-            reply = _strip_done(reply)
-
         _emit(reply, connection_id, apigw)
         return reply
 
-    # ---------------- Agentic path ----------------
+    # ---- Agentic path
     state = get_working_state(connection_id) or {
         "preferences": {},
         "cars": [],
@@ -171,10 +223,14 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
     }
 
     MAX_TURNS = 5
-    last_reply = "(no output)"
+    last_emitted: str = "(no output)"
+
+    # Alias shim so minor name mismatches don't break calls
+    ALIASES = {
+        "fetch_safety_rating": "fetch_safety_ratings",
+    }
 
     for _ in range(MAX_TURNS):
-        # Only nudge if last turn was assistant; otherwise model already owes a reply
         if _needs_continue_nudge(messages):
             messages.append({"role": "user", "content": [{"text": "(continue)"}]})
 
@@ -202,32 +258,24 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
         tool_uses = _extract_tool_uses(content)
         assistant_texts = _extract_text_chunks(content)
 
-        # Stream any assistant text immediately (planning/status), but skip the DONE token
-        for t in assistant_texts:
-            if t and not DONE_RE.search(t):
-                t = t.strip()
-                if t:
-                    _emit(t, connection_id, apigw)
-                    last_reply = t
-
-        # If there are NO tool uses, this is a terminal conversational turn
-        if not tool_uses:
-            reply = "\n\n".join(t.strip() for t in assistant_texts if t) or "(no output)"
-            if DONE_RE.search(reply):
-                reply = _strip_done(reply)
+        if tool_uses:
+            # During tool turns, emit a single friendly status line (no leaking tool markup)
+            _emit(_status_from_tool_uses(tool_uses), connection_id, apigw)
+        else:
+            # Terminal conversational turn without tools: emit ONCE, cleaned
+            reply = _join_clean(assistant_texts)
             _emit(reply, connection_id, apigw)
             save_working_state(connection_id, state)
             return reply
 
-        # ===== Tool execution round =====
-        # Append the assistant (toolUse + any text) to the convo
+        # ===== Execute tools =====
         messages.append({"role": "assistant", "content": content})
         tool_results_content: List[Dict[str, Any]] = []
 
         for tu in tool_uses:
             if not isinstance(tu, dict):
                 continue
-            name = tu.get("name")
+            name = ALIASES.get(tu.get("name"), tu.get("name"))
             use_id = tu.get("toolUseId")
             tool_input = tu.get("input") or {}
             status = "success"
@@ -237,40 +285,32 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
                     raise ValueError(f"Invalid tool '{name}'")
 
                 result = dispatch(name, connection_id, tool_input)
+                result = _json_safe(result)
 
-                # Normalize result to Bedrock toolResult content
                 if isinstance(result, dict):
-                    result_json = result
-                    result_content = [{"json": result_json}]
+                    result_content = [{"json": result}]
                 elif isinstance(result, str):
-                    result_json = {"text": result}
                     result_content = [{"text": result}]
                 elif isinstance(result, list):
-                    # Expect list of {"json": {...}} or {"text": "..."}
+                    # Accept either [{"json": {...}}] or [{"text": "..."}]
                     result_content = result if result else [{"text": "(no content)"}]
-                    # Lightweight best-effort JSON for working memory
-                    if result and isinstance(result[0], dict):
-                        result_json = result[0].get("json", {}) or {"text": result[0].get("text")}
-                    else:
-                        result_json = {}
                 else:
-                    result_json = {"raw": str(result)}
                     result_content = [{"text": str(result)}]
 
                 # Update working memory
-                if name == "fetch_user_preferences" and isinstance(result_json, dict):
+                if name == "fetch_user_preferences" and isinstance(result, dict):
                     try:
-                        state["preferences"].update(result_json or {})
+                        state["preferences"].update(result or {})
                     except Exception:
                         pass
-                elif name == "fetch_cars_of_year" and isinstance(result_json, dict):
-                    cars = result_json.get("cars") or result_json.get("models") or []
+                elif name == "fetch_cars_of_year" and isinstance(result, dict):
+                    cars = result.get("cars") or result.get("models") or []
                     if isinstance(cars, list):
                         state["cars"].extend(cars)
-                elif name == "fetch_safety_rating":
-                    state["ratings"].append(result_json)
+                elif name == "fetch_safety_ratings":
+                    state["ratings"].append(result)
                 elif name == "fetch_gas_milage":
-                    state["gas_data"].append(result_json)
+                    state["gas_data"].append(result)
 
             except Exception as e:
                 status = "error"
@@ -288,7 +328,7 @@ def call_bedrock(connection_id: str, apigw, base_system_prompt: str) -> str:
         save_working_state(connection_id, state)
         messages.append({"role": "user", "content": tool_results_content})
 
-    # Fallback if MAX_TURNS exhausted
-    _emit(last_reply, connection_id, apigw)
+    # Safety valve: if we fall through, emit last message once
+    _emit(last_emitted, connection_id, apigw)
     save_working_state(connection_id, state)
-    return last_reply
+    return last_emitted

@@ -86,22 +86,27 @@ def call_bedrock(connection_id: str, base_system_prompt: str) -> str:
         use_id = tu.get("toolUseId")
         tool_input = tu.get("input") or {}
 
-        # Guard against hallucinated/invalid tool names
-        if name not in allowed_names:
-            result_content = [{"text": f"Invalid tool '{name}'. Allowed: {', '.join(allowed_names) or '(none)'}"}]
-        else:
-            try:
+        status = "success"
+        try:
+            if name not in allowed_names:
+                result_content = [{"text": f"Invalid tool '{name}'. Allowed: {', '.join(allowed_names) or '(none)'}"}]
+                status = "error"
+            else:
                 result_content = dispatch(name, connection_id, tool_input)
-            except Exception as e:
-                result_content = [{"text": f"Tool '{name}' failed: {e}"}]
+                if not isinstance(result_content, list):
+                    result_content = [{"json": result_content}]
+        except Exception as e:
+            result_content = [{"text": f"Tool '{name}' failed: {e}"}]
+            status = "error"
 
-        # IMPORTANT: toolResult must come from role='user'
+        # ✅ Fixed: include required status + ensure content is valid array of message parts
         messages_plus.append({
             "role": "user",
             "content": [{
                 "toolResult": {
                     "toolUseId": use_id,
-                    "content": result_content
+                    "status": status,
+                    "content": result_content or [{"text": "(no content)"}],
                 }
             }]
         })

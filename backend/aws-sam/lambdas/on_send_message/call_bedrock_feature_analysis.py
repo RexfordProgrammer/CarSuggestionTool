@@ -1,15 +1,10 @@
 import json
 from bedrock_caller import call_bedrock
-
-TARGET_FLAGS = ["number_of_seats"]
+from target_flags import get_target_flags
+# TARGET_FLAGS = ["number_of_seats"]
 
 def get_user_preferences_response(connection_id: str) -> str:
-    """
-    Analyze the conversation history for mentioned car feature flags.
-    Uses the unified Bedrock backend (call_bedrock) which fetches the messages from DynamoDB.
-    Ensures the model outputs valid pure JSON — never tool or text formats.
-    """
-    flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
+    flags_str = ", ".join(f'"{f}"' for f in get_target_flags())
 
     # --- Strict JSON-only system prompt ---
     system_prompt = (

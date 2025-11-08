@@ -1,6 +1,6 @@
 # tools/__init__.py
 from tools import (
-    fetch_user_preferences,
+    extract_user_prefs,
     fetch_cars_of_year,
     fetch_gas_milage,
     fetch_safety_rating,
@@ -8,10 +8,10 @@ from tools import (
 
 # List of imported tool modules (each must define SPEC and handle())
 ALL_TOOLS = [
-    fetch_user_preferences,
     fetch_cars_of_year,
     fetch_gas_milage,
     fetch_safety_rating,
+    extract_user_prefs,
 ]
 
 

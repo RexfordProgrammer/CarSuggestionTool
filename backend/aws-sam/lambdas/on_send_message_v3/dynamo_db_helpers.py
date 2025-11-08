@@ -4,6 +4,7 @@ import json
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table("messages")
 preferenceTable = dynamodb.Table("session-preferences")
+memoryTable = dynamodb.Table("session-memory")
 
 
 def get_session_messages(connection_id):
@@ -71,3 +72,24 @@ def get_user_preferences(sessionid):
     item = response.get("Item")
     return item.get("preferences", {}) if item else {}
 
+
+def get_working_state(connection_id):
+    """Retrieve the agent's working memory snapshot for this session."""
+    try:
+        response = table.get_item(Key={"connectionId": connection_id})
+        item = response.get("Item")
+        return item.get("working_state", {}) if item else {}
+    except Exception as e:
+        print(f"Error loading working state: {e}")
+        return {}
+
+def save_working_state(connection_id, state):
+    """Persist the agent's current working memory (e.g. preferences, cars, ratings)."""
+    try:
+        table.update_item(
+            Key={"connectionId": connection_id},
+            UpdateExpression="SET working_state = :s",
+            ExpressionAttributeValues={":s": state},
+        )
+    except Exception as e:
+        print(f"Error saving working state: {e}")

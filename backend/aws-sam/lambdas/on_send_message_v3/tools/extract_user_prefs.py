@@ -6,8 +6,8 @@ from target_flags import get_target_flags
 
 SPEC = {
     "toolSpec": {
-        "name": "fetch_user_preferences",
-        "description": "Extract which car features (like number_of_seats) the user has mentioned in the conversation.",
+        "name": "extract_user_prefs",
+        "description": "Analyze the conversation history to infer car preferences (e.g., seats, brand, budget, body style).",
         "inputSchema": {
             "json": {
                 "type": "object",

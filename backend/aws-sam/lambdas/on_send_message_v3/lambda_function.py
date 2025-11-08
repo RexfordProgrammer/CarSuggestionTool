@@ -2,7 +2,7 @@ import boto3
 import json
 
 from dynamo_db_helpers import save_user_message
-from bedrock_caller import call_bedrock  # tool-aware orchestrator
+from bedrock_caller_v2 import call_bedrock  # tool-aware orchestrator
 
 def push_message_to_caller(connection_id, apigw, message: str) -> None:
     payload = {"type": "bedrock_reply", "reply": message}

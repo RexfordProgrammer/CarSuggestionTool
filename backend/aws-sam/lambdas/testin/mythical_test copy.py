@@ -46,3 +46,20 @@ def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
     make = tool_input.get("make", "Toyota")  # default make
     cars = _fetch_from_nhtsa(year, make)
     return [{"json": {"year": year, "make": make, "count": len(cars), "vehicles": cars[:100]}}]
+
+
+if __name__ == "__main__":
+    print("🔧 Testing fetch_nhtsa_cars tool manually")
+    try:
+        year_input = input("Enter model year (default 2021): ").strip()
+        make_input = input("Enter make (default Toyota): ").strip()
+        year = int(year_input) if year_input else 2021
+        make = make_input or "Toyota"
+    except ValueError:
+        print("Invalid year entered; using default 2021.")
+        year, make = 2021, "Toyota"
+
+    print(f"\nFetching NHTSA data for {make} {year}...")
+    result = handle("local-test", {"year": year, "make": make})
+    print("\n=== Result ===")
+    print(json.dumps(result, indent=2))

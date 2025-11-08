@@ -451,6 +451,6 @@ footer {
   flex-grow: 1;
   overflow-y: auto;
   padding: 1rem;
-  background: #ffffffff; /* 8-digit hex (opaque white) */
+  background: #ffffff; /* 8-digit hex (opaque white) */
   border-radius: 0.75rem;
 }

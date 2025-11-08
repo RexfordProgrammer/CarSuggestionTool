@@ -3,14 +3,14 @@ from tools import (
     extract_user_prefs,
     fetch_cars_of_year,
     fetch_gas_milage,
-    fetch_safety_rating,
+    fetch_safety_ratings,
 )
 
 # List of imported tool modules (each must define SPEC and handle())
 ALL_TOOLS = [
     fetch_cars_of_year,
     fetch_gas_milage,
-    fetch_safety_rating,
+    fetch_safety_ratings,
     extract_user_prefs,
 ]
 

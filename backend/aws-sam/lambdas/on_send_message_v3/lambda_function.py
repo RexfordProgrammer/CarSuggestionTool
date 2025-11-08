@@ -1,44 +1,55 @@
 import boto3
 import json
 
-from dynamo_db_helpers import save_user_message, save_bot_response
-from call_bedrock_conversational import get_conversational_response
+from dynamo_db_helpers import save_user_message
+from bedrock_caller import call_bedrock  # tool-aware orchestrator
 
-def push_message_to_caller(connection_id, apigw, message):
+def push_message_to_caller(connection_id, apigw, message: str) -> None:
     payload = {"type": "bedrock_reply", "reply": message}
-    try:
-        apigw.post_to_connection(
-            ConnectionId=connection_id,
-            Data=json.dumps(payload).encode("utf-8")
-        )
-        print("Sent successfully")
-    except Exception as e:
-        print("Error posting to connection:", str(e))
-
+    apigw.post_to_connection(
+        ConnectionId=connection_id,
+        Data=json.dumps(payload).encode("utf-8"),
+    )
 
 def lambda_handler(event, context):
-    print("Full event:", json.dumps(event))
-    # Session identifiers
+    # Basic request info
     connection_id = event["requestContext"]["connectionId"]
     domain = event["requestContext"]["domainName"]
     stage = event["requestContext"]["stage"]
 
-    # Parse inbound frame
+    # Parse inbound message (WebSocket frame)
     try:
         body = json.loads(event.get("body") or "{}")
-    except Exception as e:
-        print("Error parsing body:", e)
+    except Exception:
         body = {}
 
-    user_message = body.get("text", "(no text)")
-    save_user_message(user_message, connection_id)
+    # Normalize empty/blank messages to avoid LLM "empty content" errors
+    user_message = (body.get("text") or "").strip()
+    if user_message:
+        save_user_message(user_message, connection_id)
+    else:
+        # Optionally avoid saving blanks; still run the orchestrator on history
+        user_message = "(connected)"
 
-    # Orchestrate via Bedrock (now with native tool calls)
-    conversational_response = get_conversational_response(connection_id)
-    save_bot_response(conversational_response, connection_id)
+    # System prompt (base); bedrock_caller will append allowed tool list and guardrails
+    system_prompt = (
+        "You are an intelligent assistant embedded in a car suggestion tool. "
+        "Respond naturally. Use available tools when appropriate to retrieve NHTSA data. "
+        "Do not invent tool names. If no tool fits, continue the conversation without tools."
+    )
 
-    # Push to caller
-    apigw = boto3.client("apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}")
-    push_message_to_caller(connection_id, apigw, conversational_response)
+    # Run the tool-aware orchestrator
+    reply = call_bedrock(connection_id, system_prompt)
+
+    # Push to client
+    apigw = boto3.client(
+        "apigatewaymanagementapi",
+        endpoint_url=f"https://{domain}/{stage}",
+    )
+    try:
+        push_message_to_caller(connection_id, apigw, reply)
+    except Exception as e:
+        # Log but still return 200 so the socket doesn't get dropped
+        print("Error posting to connection:", str(e))
 
     return {"statusCode": 200}

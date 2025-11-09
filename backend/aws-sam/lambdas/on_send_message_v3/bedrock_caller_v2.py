@@ -45,7 +45,11 @@ def _build_system_prompt(specs: List[Dict[str, Any]]) -> str:
         "- Use `fetch_gas_milage` for fuel economy.\n"
         "- After each tool call, re-evaluate what to do next.\n"
         "- Keep replies concise and natural.\n"
-        "- Use working memory to avoid redundant actions.\n"
+        "- Use working memory to avoid redundant actions.\n\n"
+        "Verification Rules (mandatory):\n"
+        "- If the user asks about safety ratings, NHTSA data, VIN/VehicleId, crash tests, MPG/fuel economy, CO₂/emissions, "
+        "you MUST call the corresponding tool(s) and base numeric claims on tool results. Do NOT guess or estimate.\n"
+        "- If you lack enough inputs (year/make/model), ask a brief clarifying question instead of answering.\n"
     )
 
 def _status_from_tool_uses(tool_uses: List[Dict[str, Any]]) -> str:
@@ -150,12 +154,10 @@ def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allo
         assistant_texts = extract_text_chunks(content)
 
         if tool_uses:
-            # ✅ emit one consolidated status line and remember it
             status_line = _status_from_tool_uses(tool_uses)
             emitter.emit(status_line)
             last_emitted = status_line
         else:
-            # ✅ terminal turn: emit once and return
             reply = join_clean(assistant_texts)
             emitter.emit(reply)
             save_working_state(connection_id, state)
@@ -166,13 +168,14 @@ def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allo
         tool_results_content: List[Dict[str, Any]] = []
 
         for tu in tool_uses:
+            emitter.emit("Calling Tool")
             if not isinstance(tu, dict):
                 continue
             name = tu.get("name")
             use_id = tu.get("toolUseId")
             tool_input = tu.get("input") or {}
             status = "success"
-
+            
             try:
                 result = dispatch(name, connection_id, tool_input)
                 result = json_safe(result)
@@ -216,7 +219,6 @@ def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allo
         save_working_state(connection_id, state)
         messages.append({"role": "user", "content": tool_results_content})
 
-    # ✅ Safety valve: don't emit again; just return the last thing we already sent
     return last_emitted or "(no output)"
 
 
@@ -231,11 +233,10 @@ def call_bedrock(connection_id: str, apigw) -> str:
     messages = build_history_messages(connection_id)
     emitter = Emitter(apigw, connection_id)
     
-    # ---- Fast path (strictly small-talk)
-    if _should_fast_path(messages):
+    # # ---- Fast path (strictly small-talk)
+    # if _should_fast_path(messages):
         
-        return fast_path(system_prompt, messages, emitter)
-    else:
-        
-        return slow_path(connection_id, messages, system_prompt, tool_config, emitter, allowed_names)
+    #     return fast_path(system_prompt, messages, emitter)
+    # else:    
+    return slow_path(connection_id, messages, system_prompt, tool_config, emitter, allowed_names)
     

@@ -1,3 +1,4 @@
+from typing import Any, Dict, List
 import boto3
 import json
 
@@ -74,14 +75,27 @@ def get_user_preferences(sessionid):
 
 
 def get_working_state(connection_id):
-    """Retrieve the agent's working memory snapshot for this session."""
+    """Retrieve the agent's working memory snapshot for this session, with built-in defaults."""
+    default_state = {
+        "preferences": {},
+        "cars": [],
+        "ratings": [],
+        "gas_data": [],
+    }
+
     try:
         response = table.get_item(Key={"connectionId": connection_id})
         item = response.get("Item")
-        return item.get("working_state", {}) if item else {}
+
+        # If there's a stored state, merge it with defaults (to ensure all keys exist)
+        if item and "working_state" in item:
+            stored_state = item["working_state"]
+            # Merge: stored values override defaults
+            return {**default_state, **stored_state}
     except Exception as e:
         print(f"Error loading working state: {e}")
-        return {}
+
+    return default_state
 
 def save_working_state(connection_id, state):
     """Persist the agent's current working memory (e.g. preferences, cars, ratings)."""
@@ -93,3 +107,13 @@ def save_working_state(connection_id, state):
         )
     except Exception as e:
         print(f"Error saving working state: {e}")
+
+def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
+    raw = get_session_messages(connection_id) or []
+    msgs: List[Dict[str, Any]] = []
+    for m in raw:
+        role = m.get("role")
+        content = m.get("content")
+        if role in ("user", "assistant") and isinstance(content, str):
+            msgs.append({"role": role, "content": [{"text": content}]})
+    return msgs

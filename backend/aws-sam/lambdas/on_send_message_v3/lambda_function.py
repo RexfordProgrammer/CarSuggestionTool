@@ -35,26 +35,8 @@ def lambda_handler(event, context):
         # owes a reply on first connect / blank ping.
         save_user_message("(connected)", connection_id)
 
-    # Base system prompt; the orchestrator will append tool list and guardrails
-    system_prompt = (
-        "You are an intelligent assistant embedded in a car suggestion tool. "
-        "Respond naturally. Use available tools when appropriate to retrieve NHTSA data. "
-        "Do not invent tool names. If no tool fits, continue the conversation without tools."
-    )
-
-    # Run the tool-aware orchestrator (it will stream intermediate/final messages itself)
-    try:
-        _ = call_bedrock(connection_id, apigw, system_prompt)
-    except Exception as e:
-        # Best-effort error to client (direct post; bypass orchestrator)
-        payload = {"type": "bedrock_reply", "reply": f"Sorry—something went wrong: {e}"}
-        try:
-            apigw.post_to_connection(
-                ConnectionId=connection_id,
-                Data=json.dumps(payload).encode("utf-8"),
-            )
-        except Exception:
-            pass
+    
+    _ = call_bedrock(connection_id, apigw)
 
     # Always return 200; never drop the socket from handler exceptions
     return {"statusCode": 200}

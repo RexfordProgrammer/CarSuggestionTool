@@ -7,8 +7,7 @@ SPEC = {
     "toolSpec": {
         "name": "fetch_safety_ratings",
         "description": (
-            "Retrieve NHTSA 5-Star safety ratings for a specific vehicle "
-            "by make, model, and year."
+            "get safety ratings for a car"
         ),
         "inputSchema": {
             "json": {
@@ -48,7 +47,6 @@ def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
         if not vid:
             continue
 
-        # ✅ Fetch full rating details for each vehicle ID
         try:
             detail_resp = requests.get(f"https://api.nhtsa.gov/SafetyRatings/VehicleId/{vid}?format=json", timeout=10)
             detail_resp.raise_for_status()

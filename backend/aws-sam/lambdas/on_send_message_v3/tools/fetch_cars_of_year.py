@@ -4,8 +4,8 @@ from typing import Dict, List, Any
 
 SPEC = {
     "toolSpec": {
-        "name": "fetch_nhtsa_cars",
-        "description": "Query NHTSA Vehicle API for models available in a given year (optionally by make).",
+        "name": "fetch_cars_of_year",
+        "description": "Used to get cars from a particular year",
         "inputSchema": {
             "json": {
                 "type": "object",

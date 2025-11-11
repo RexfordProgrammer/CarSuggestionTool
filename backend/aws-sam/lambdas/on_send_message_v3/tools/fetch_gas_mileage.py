@@ -4,10 +4,9 @@ from typing import Dict, List, Any
 
 SPEC = {
     "toolSpec": {
-        "name": "fetch_fuel_economy",
+        "name": "fetch_gas_mileage",
         "description": (
-            "Retrieve EPA fuel economy and emissions data for a given vehicle "
-            "specified by year, make, and model using the FuelEconomy.gov API."
+            "get gas mileage of a vehicle with this tool, model optional"
         ),
         "inputSchema": {
             "json": {

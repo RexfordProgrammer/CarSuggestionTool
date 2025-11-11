@@ -1,36 +1,42 @@
 # tools/__init__.py
-from typing import Any, Dict
-from tools import (
-    extract_user_prefs,
+from typing import Any, Dict, List
+
+# ✅ Use relative imports inside the package
+from . import (
     fetch_cars_of_year,
-    fetch_gas_milage,
+    fetch_gas_mileage,      # make sure the tool module is named with "_mileage"
     fetch_safety_ratings,
 )
 
-# List of imported tool modules (each must define SPEC and handle())
+# Each module must expose: SPEC: {"toolSpec": {...}}, and handle(connection_id, input)
 ALL_TOOLS = [
     fetch_cars_of_year,
-    fetch_gas_milage,
+    fetch_gas_mileage,
     fetch_safety_ratings,
-    extract_user_prefs,
 ]
 
+# (Optional) sanity check for duplicate names
+_tool_names: List[str] = [t.SPEC["toolSpec"]["name"] for t in ALL_TOOLS]
+if len(_tool_names) != len(set(_tool_names)):
+    raise RuntimeError(f"Duplicate tool names detected: {_tool_names}")
 
-def tool_specs():
-    """Return all tool specs for Bedrock registration."""
-    return [t.SPEC["toolSpec"] for t in ALL_TOOLS]
+def tool_specs() -> Dict[str, Any]:
+    """Return Bedrock tool config + raw specs for prompts/UX."""
+    specs = [t.SPEC for t in ALL_TOOLS]  # each is {"toolSpec": {...}}
+    tool_config = {
+        "tools": [
+            {"toolSpec": spec["toolSpec"]}
+            for spec in specs
+        ]
+    }
+    return {
+        "tool_config": tool_config,
+        "specs": specs,
+    }
 
-
-def dispatch(name: str, connection_id: str, tool_input: dict):
-    """Dispatch a tool call by name."""
+def dispatch(name: str, connection_id: str, tool_input: dict) -> Any:
+    """Dispatch a tool call by exact toolSpec.name."""
     for t in ALL_TOOLS:
         if name == t.SPEC["toolSpec"]["name"]:
             return t.handle(connection_id, tool_input)
     raise ValueError(f"Unknown tool: {name}")
-
-
-def allowed_tools() -> Dict[str, Any]:
-    specs = tool_specs() or []
-    tool_config = {"tools": [{"toolSpec": s} for s in specs]} if specs else None
-    allowed_names = {s.get("name") for s in specs}
-    return {"tool_config": tool_config, "allowed_names": allowed_names, "specs": specs}

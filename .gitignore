@@ -25,3 +25,6 @@ backend/lambdas/on_disconnect_lambda/function.zip
 backend/lambdas/on_send_message_lambda/function.zip
 /backend/aws-sam/.aws-sam
 CarSuggestionTool.code-workspace
+/frontend (LocalTest)/dist/assets
+/frontend (LocalTest)/dist/Chatbot
+frontend (LocalTest)/dist/index.html

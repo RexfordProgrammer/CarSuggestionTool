@@ -72,7 +72,7 @@ class make(Enum):
     MERCEDES_MAYBACH = ["MERCEDES-MAYBACH"]
 
 class drive_train(Enum):
-    FWD = ["FWD", "AWD/FWD", "FWD/AWD", "FWD/4WD"]
+    FWD = ["FWD", "AWD/FWD", "FWD/AWD", "FWD/4WD", "fWD"]
     AWD = ["AWD", "AWD/FWD", "FWD/AWD", "RWD/AWD", "AWD/2WD", "2WD/AWD", "AWD/RWD"]
     RWD = ["RWD", "RWD/4WD", "RWD/AWD", "AWD/RWD"]
     fourWD = ["4WD", "RWD/4WD", "FWD/4WD", "4WD/2WD"]
@@ -81,7 +81,7 @@ class drive_train(Enum):
     ADW = ["ADW"]
     fourx2 = ["4x2"]
     fourx4 = ["4x4"]
-    fWD = ["fWD"]
+    #fWD = ["fWD"] manually moved to FWD
 
 class vehicle_type(Enum):
     PC = ["PC"]

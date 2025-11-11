@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 import boto3
 import json
+from models import ChatMessage, MessageRecord, PreferenceRecord, MemoryRecord
 
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table("messages")
@@ -11,13 +12,18 @@ memoryTable = dynamodb.Table("session-memory")
 def get_session_messages(connection_id):
     """Return a list of messages for a given WebSocket connection."""
     response = table.get_item(Key={"connectionId": connection_id})
-    item = response.get("Item")
-    return item.get("messages", []) if item else []
+    item = response.get("Item") or {"connectionId": connection_id, "messages": []}
+    
+    #validate item structure
+    record = MessageRecord.model_validate(item)
+    
+    #return list of messages as dicts
+    return [m.model_dump for m in record.messages]
 
 
 def save_user_message(usermessage, connection_id):
     """Append a user message to the session's message list."""
-    entry = {"role": "user", "content": usermessage}
+    entry = ChatMessage(role="user", content=usermessage).model_dump
     table.update_item(
         Key={"connectionId": connection_id},
         UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
@@ -30,7 +36,7 @@ def save_user_message(usermessage, connection_id):
 
 def save_bot_response(botmessage, connection_id):
     """Append a bot (assistant) response to the session's message list."""
-    entry = {"role": "assistant", "content": botmessage}
+    entry = ChatMessage(role="assistant", content=botmessage).model_dump
     table.update_item(
         Key={"connectionId": connection_id},
         UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
@@ -43,6 +49,9 @@ def save_bot_response(botmessage, connection_id):
 
 def initialize_user_preference(sessionid):
     """Create a new preferences entry if it doesn't already exist."""
+
+    PreferenceRecord(preferenceKey=sessionid)
+
     preferenceTable.put_item(
         Item={
             "preferenceKey": sessionid,
@@ -71,7 +80,16 @@ def get_user_preferences(sessionid):
     """Retrieve user preferences for a given session."""
     response = preferenceTable.get_item(Key={"preferenceKey": sessionid})
     item = response.get("Item")
-    return item.get("preferences", {}) if item else {}
+    if not item:
+        return {}
+    rec = PreferenceRecord.model_validate(item)
+
+    return {
+        "vehicle_type": rec.vehicle_type,
+        "drive_train": rec.drive_train,
+        "num_of_seating": rec.num_of_seating,
+        "overall_stars": rec.overall_stars,
+    }
 
 
 def get_working_state(connection_id):

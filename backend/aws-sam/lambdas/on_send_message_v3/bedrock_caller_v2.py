@@ -11,6 +11,7 @@ from dynamo_db_helpers import (
 from tools import allowed_tools, tool_specs, dispatch
 from target_flags import get_target_flags
 from llm_response_processors import extract_text_chunks, extract_tool_uses, join_clean, json_safe, clean, needs_continue_nudge
+from models import WorkingState
 
 from emitter import Emitter
 
@@ -123,6 +124,9 @@ def fast_path(system_prompt, messages, emitter: Emitter):
 def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allowed_names):
     state = get_working_state(connection_id)
 
+    state = WorkingState.model_validate(state).model_dump()
+
+
     MAX_TURNS = 5
     last_emitted: Optional[str] = None  # ✅ track what we actually sent
 
@@ -160,7 +164,7 @@ def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allo
         else:
             reply = join_clean(assistant_texts)
             emitter.emit(reply)
-            save_working_state(connection_id, state)
+            save_working_state(connection_id, WorkingState.model_validate(state).model_dump())
             return reply
 
         # Execute tools 
@@ -216,7 +220,7 @@ def slow_path(connection_id, messages, system_prompt, tool_config, emitter, allo
                 }
             })
 
-        save_working_state(connection_id, state)
+        save_working_state(connection_id, WorkingState.model_validate(state).model_dump())
         messages.append({"role": "user", "content": tool_results_content})
 
     return last_emitted or "(no output)"

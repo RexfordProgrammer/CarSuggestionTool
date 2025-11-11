@@ -1,0 +1,3 @@
+PyJWT
+pydantic
+requests

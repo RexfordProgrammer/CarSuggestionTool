@@ -2,37 +2,13 @@ import re
 from bedrock_caller import call_bedrock
 from typing import List, Literal
 from pydantic import BaseModel, ValidationError
-
-TARGET_FLAGS = ["number_of_seats"]
+from target_flags import get_target_flags
+# TARGET_FLAGS = ["number_of_seats"]
 TRIGGER_LINE = "Hold on while we gather those recommendations for you..."
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
-
-
-# === Keyword detection ===
-KEYWORDS_RECO = re.compile(
-    r"\b(recommend|reccomend|suggest|what (?:car|vehicle) should I|get|show.+cars?)\b",
-    re.IGNORECASE
-)
-
-# def _wants_recommendations(validated_messages: List[ChatMessage]) -> bool:
-#     """Detect whether the user's last message asked for car recommendations."""
-#     for msg in reversed(validated_messages):
-#         if msg.role == "user":
-#             return bool(KEYWORDS_RECO.search(msg.content))
-#     return False
-
-# def _enforce_trigger(text: str) -> str:
-#     """Guarantee the system trigger line appears exactly once at the end."""
-#     idx = text.lower().rfind(TRIGGER_LINE.lower())
-#     if idx != -1:
-#         return text[: idx + len(TRIGGER_LINE)]
-#     text = text.rstrip()
-#     if text and not text.endswith((".", "!", "?")):
-#         text += "."
-#     return f"{text}\n{TRIGGER_LINE}"
 
 
 def get_conversational_response(connection_id: str) -> str:
@@ -47,7 +23,7 @@ def get_conversational_response(connection_id: str) -> str:
         except ValidationError:
             continue
 
-    flags_str = ", ".join(f'"{f}"' for f in TARGET_FLAGS)
+    flags_str = ", ".join(f'"{f}"' for f in get_target_flags())
 
     system_prompt = (
         "You are an intelligent assistant embedded in a car suggestion tool. "

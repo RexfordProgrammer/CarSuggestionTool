@@ -2,24 +2,30 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Car Suggestion Tool — SAM stack using existing IAM roles for Lambda functions (v2),
-  now with SharedHelpers layer for reusable code.
+  now with SharedHelpers layer and centralized logging.
 
 Globals:
   Function:
     Runtime: python3.12
     Timeout: 30
     MemorySize: 256
+    Tracing: Active                     # Enable X-Ray tracing
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO                 # Default log level (override per env if needed)
+    LoggingConfig:                      # ✅ Central logging config (applies to all functions)
+      LogFormat: JSON                   # Structured JSON logs for CloudWatch
+      ApplicationLogLevel: INFO
+      SystemLogLevel: INFO
+      LogGroup: !Ref CentralLogGroup
 
 Resources:
-  # Shared Python Layer for all helper files 
-  SharedHelpersLayer:
-    Type: AWS::Serverless::LayerVersion
+  # === Central CloudWatch Log Group ===
+  CentralLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      LayerName: shared_helpers_v2
-      ContentUri: layers/shared_helpers/
-      CompatibleRuntimes:
-        - python3.12
-      RetentionPolicy: Delete
+      LogGroupName: /aws/lambda/car-suggestion-tool
+      RetentionInDays: 14
 
   # === Lambda Functions ===
   OnConnectFunction:
@@ -29,8 +35,6 @@ Resources:
       CodeUri: lambdas/on_connect/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
-      Layers:
-        - !Ref SharedHelpersLayer
 
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
@@ -39,8 +43,6 @@ Resources:
       CodeUri: lambdas/on_disconnect/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
-      Layers:
-        - !Ref SharedHelpersLayer
 
   OnDefaultFunction:
     Type: AWS::Serverless::Function
@@ -49,8 +51,6 @@ Resources:
       CodeUri: lambdas/on_default/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
-      Layers:
-        - !Ref SharedHelpersLayer
 
   OnLoginFunction:
     Type: AWS::Serverless::Function
@@ -59,8 +59,6 @@ Resources:
       CodeUri: lambdas/on_login/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
-      Layers:
-        - !Ref SharedHelpersLayer
 
   OnSendMessageFunction:
     Type: AWS::Serverless::Function
@@ -69,5 +67,11 @@ Resources:
       CodeUri: lambdas/on_send_message/
       Handler: lambda_function.lambda_handler
       Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
-      Layers:
-        - !Ref SharedHelpersLayer
+
+  OnSendMessageFunctionV3:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_send_message_v3
+      CodeUri: lambdas/on_send_message_v3/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd

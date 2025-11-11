@@ -142,8 +142,7 @@ def make_enum(database, column):
     unique_values = unique_values[column]
     
     enum_list = [] #2D list
-    #seperaters_list = [",", " ", "/"]  
-    seperaters_list = []
+    seperaters_list = [",", " ", "/", "or", "TO"]  
 
     for val in unique_values:
         val = str(val).replace("\n", " ")

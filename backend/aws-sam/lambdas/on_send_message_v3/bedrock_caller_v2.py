@@ -1,29 +1,29 @@
+# bedrock_caller.py
 import os
 import json
-import threading
 from typing import List, Dict, Any
-
 import boto3
 import botocore
+from decimal import Decimal
 
-from dynamo_db_helpers import (
-    build_history_messages,
-    get_working_state,
-    save_working_state,
+from dynamo_db_helpers import get_session_messages
+from db_tools import (
+    save_assistant_from_bedrock_resp,
+    save_user_bedrock_style,
+    append_message_entry,
 )
 from tools import dispatch, tool_specs
 from llm_response_processors import (
     extract_text_chunks,
     extract_tool_uses,
     join_clean,
-    json_safe,
     needs_continue_nudge,
 )
 from emitter import Emitter
 
-# =====================================================
-# CONFIG
-# =====================================================
+# ==========================
+# CONFIGURATION
+# ==========================
 ORCHESTRATOR_MODEL = os.getenv("MASTER_MODEL", "ai21.jamba-1-5-large-v1:0")
 bedrock = boto3.client(
     "bedrock-runtime",
@@ -31,234 +31,258 @@ bedrock = boto3.client(
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
 debug = True
-MAX_TURNS = int(os.getenv("MAX_TURNS", "2"))
+MAX_TURNS = int(os.getenv("MAX_TURNS", "3"))
+HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 
-# =====================================================
+
+def _preview_tool_result(result, max_lines: int = 40, max_line_chars: int = 200) -> str:
+    try:
+        if isinstance(result, (dict, list)):
+            s = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+        else:
+            s = str(result)
+    except Exception:
+        s = str(result)
+
+    lines = s.splitlines()
+    clipped = []
+    for line in lines[:max_lines]:
+        if len(line) > max_line_chars:
+            clipped.append(line[:max_line_chars] + "…")
+        else:
+            clipped.append(line)
+    if len(lines) > max_lines:
+        clipped.append(f"... [truncated to {max_lines} lines]")
+    return "\n".join(clipped)
+
+
+def _to_native_json(obj):
+    """Recursively convert DynamoDB Decimals to int/float and normalize JSON-unsafe types."""
+    if isinstance(obj, Decimal):
+        return int(obj) if obj == obj.to_integral_value() else float(obj)
+    if isinstance(obj, dict):
+        return {k: _to_native_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_native_json(v) for v in obj]
+    if isinstance(obj, set):
+        return [_to_native_json(v) for v in obj]
+    if isinstance(obj, (bytes, bytearray)):
+        return obj.decode("utf-8", errors="replace")
+    return obj
+
+
+# ==========================
 # HELPERS
-# =====================================================
-
-def _history_window(messages: List[Dict[str, Any]], max_len: int = 8) -> List[Dict[str, Any]]:
-    """Return a slice ≤ *max_len* that **always starts with a user message**.
-
-    If the naive tail slice starts with an assistant role, walk backward until we
-    hit the previous user message so Bedrock's `messages` array is valid.
-    """
+# ==========================
+def _history_window(messages: List[Dict[str, Any]], max_len=HISTORY_WINDOW):
+    """Keep the most recent N messages and ensure the slice starts with a user message when possible."""
     slice_ = messages[-max_len:]
-    if slice_ and slice_[0]["role"] != "user":
-        for idx in range(len(messages) - max_len - 1, -1, -1):
-            if messages[idx]["role"] == "user":
-                slice_ = messages[idx:]
+    if slice_ and slice_[0].get("role") != "user":
+        for i in range(len(messages) - max_len - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                slice_ = messages[i:]
                 break
     return slice_
 
 
+def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Guarantee every message has Bedrock-compliant content blocks and native JSON scalars."""
+    cleaned = []
+    for m in messages:
+        role = m.get("role")
+        content = m.get("content")
+
+        if isinstance(content, str):
+            blocks = [{"text": content}]
+        elif isinstance(content, list):
+            blocks = content
+        else:
+            blocks = [{"text": str(content)}]
+
+        blocks = _to_native_json(blocks)
+        cleaned.append({"role": role, "content": blocks})
+    return cleaned
+
+
 def _build_system_prompt(specs: List[Dict[str, Any]]) -> str:
-    """Compose the system prompt, embedding tool descriptions."""
-    lines: List[str] = []
+    """Construct system prompt with tool listings and optional appended rules."""
+    lines = []
     for s in specs:
         ts = s.get("toolSpec", s)
         lines.append(f"- {ts.get('name')}: {ts.get('description')}")
     allowed_block = "\n".join(lines) or "- (no tools available)"
 
-    return (
-        "You are an intelligent assistant embedded in a car suggestion tool.\n"
-        "You must call the appropriate tool whenever data retrieval is required.\n"
-        "Do not merely describe your intention — always use a valid `toolUse` block.\n\n"
-        "Follow this literal sequence:\n"
-        "1) Ask or confirm the YEAR.\n"
-        "2) Fetch available cars for that YEAR (use `fetch_cars_of_year`).\n"
-        "3) Ask for or infer the MAKE.\n"
-        "4) Narrow to specific MODELS.\n"
-        "5) Compare top 3 via `fetch_safety_ratings` and `fetch_gas_mileage`.\n\n"
-        "For example (instructional only, not literal output):\n"
-        "{\"toolUse\": {\"name\": \"fetch_cars_of_year\", \"input\": {\"year\": 2020}}}\n"
-        "Do not expose this example or any tool syntax in your visible text replies.\n\n"
+    appendix_text = ""
+    appendix_path = os.path.join(os.path.dirname(__file__), "prompt_append.txt")
+    if os.path.exists(appendix_path):
+        with open(appendix_path, "r", encoding="utf-8") as f:
+            appendix_text = f.read().strip()
+
+    base_prompt = (
         "Available tools:\n"
         f"{allowed_block}\n\n"
         "When responding:\n"
         "- Only emit valid `toolUse` blocks when invoking tools.\n"
         "- Never describe tool calls in plain text.\n"
         "- Do NOT include tool JSON in user-visible replies.\n"
-        "- Be conversational and concise."
+        "- Be conversational and concise.\n"
     )
+    if appendix_text:
+        base_prompt += "\n\nADDITIONAL RULES:\n" + appendix_text + "\n"
+    return base_prompt
 
 
-def _extract_content_from_resp(resp: Dict[str, Any]) -> List[Dict[str, Any]]:
-    out_msg = (resp.get("output") or {}).get("message") or {}
-    return out_msg.get("content") or []
+def get_chat_history(connection_id: str) -> List[Dict[str, Any]]:
+    """
+    Build windowed, normalized transcript for the model.
 
-# =====================================================
-# MAIN ORCHESTRATION LOOP
-# =====================================================
+    NOTE: This reads from Dynamo (via get_session_messages). All *writes*
+    to the transcript go through db_tools now.
+    """
+    raw_history = get_session_messages(connection_id) or []
+    windowed = _history_window(raw_history)
+    safe_history = _normalize_messages(windowed)
 
-def slow_path(connection_id: str, messages: List[Dict[str, Any]], system_prompt: str, tools: List[Dict[str, Any]], emitter: Emitter):
-    """Core loop handling LLM ↔ tool interaction."""
+    if needs_continue_nudge(safe_history):
+        # Persist a "(continue)" user nudge via db_tools (no tools involved here)
+        save_user_bedrock_style(
+            connection_id,
+            [{"text": "(continue)"}],
+        )
+        raw_history = get_session_messages(connection_id) or []
+        windowed = _history_window(raw_history)
+        safe_history = _normalize_messages(windowed)
 
-    state = get_working_state(connection_id) or {
-        "preferences": {},
-        "cars": [],
-        "ratings": [],
-        "gas_data": [],
-    }
+    return safe_history
+
+
+# ==========================
+# MAIN ORCHESTRATION
+# ==========================
+def slow_path(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]], emitter: Emitter):
+    """
+    Orchestrate up to MAX_TURNS of tool-using conversation.
+
+    INVARIANT:
+    - For every `toolResult` user message we send, there is an immediately preceding
+      assistant message in `history` that contains the matching `toolUse` blocks.
+    - We never submit more `toolResult` blocks than the number of `toolUse` blocks
+      in that previous assistant message.
+    - When sending tool results, the *last* user message in `messages` consists
+      only of `toolResult` blocks (no extra text turns like '(continue)' after).
+    """
+    history: List[Dict[str, Any]] = get_chat_history(connection_id)
 
     for turn in range(MAX_TURNS):
-        is_final_turn = turn == MAX_TURNS - 1
-
-        if needs_continue_nudge(messages):
-            messages.append({"role": "user", "content": [{"text": "(continue)"}]})
-
-        mem_summary = {
-            "preferences": state["preferences"],
-            "cars": len(state["cars"]),
-            "ratings": len(state["ratings"]),
-            "gas_data": len(state["gas_data"]),
-        }
-
-        # ----------------- build system -------------------
-        sys_text = system_prompt
-        if is_final_turn:
-            sys_text += (
-                "\n\nYou have reached the final reasoning step. "
-                "Do NOT call any tools again. "
-                "Summarize your findings conversationally, recommending the best few cars "
-                "based on the available data and memory. Keep it concise and natural."
-            )
-
-        system = [{"text": sys_text + "\n\nCurrent working memory:\n" + json.dumps(mem_summary, indent=2)}]
-
+        system_blocks = [{"text": system_prompt}]
         if debug:
-            emitter.debug_emit(f"Turn {turn+1} - system prompt", system)
+            emitter.debug_emit(f"Turn {turn + 1} - ", "Sending System Prompt")
 
-        # ----------------- payload -----------------------
-        full_payload = {
+        payload = {
             "modelId": ORCHESTRATOR_MODEL,
-            "system": system,
-            "messages": _history_window(messages, 8),
+            "system": system_blocks,
+            "messages": history,
             "toolConfig": {"tools": tools},
             "inferenceConfig": {"temperature": 0.5},
         }
+        payload = _to_native_json(payload)
 
-        if debug:
-            emitter.debug_emit(f"Turn {turn+1} - payload size (chars)", len(json.dumps(full_payload)))
-            emitter.debug_emit(f"Turn {turn+1} - full Bedrock payload", full_payload)
-
-        # --------------- call Bedrock --------------------
         try:
-            resp = bedrock.converse(**full_payload)
+            resp = bedrock.converse(**payload)
         except Exception as e:
             err = f"Model call failed: {e}"
             emitter.emit(err)
+            append_message_entry(
+                connection_id,
+                {"role": "assistant", "content": [{"text": err}]},
+            )
             return err
 
-        if debug:
-            emitter.debug_emit(f"Turn {turn+1} - raw LLM response", resp)
+        # Persist assistant (including any toolUse blocks)
+        assistant_entry = save_assistant_from_bedrock_resp(connection_id, resp)
+        content = assistant_entry.get("content") or []
+        history.append(assistant_entry)
 
-        content = _extract_content_from_resp(resp)
         tool_uses = extract_tool_uses(content)
         assistant_texts = extract_text_chunks(content)
 
-        messages.append({"role": "assistant", "content": content})
+        if debug:
+            emitter.debug_emit("Tool Uses:", tool_uses)
+            emitter.debug_emit("Assistant Texts Uses:", assistant_texts)
 
-        # -------------- no tools / final ---------------
-        if not tool_uses or is_final_turn:
+        # ===== Normal conversational reply (no toolUse) OR final turn =====
+        if not tool_uses or turn == MAX_TURNS - 1:
             reply = join_clean(assistant_texts)
             if reply:
-                emitter.emit(reply)  # emitter handles persistence
-                save_working_state(connection_id, state)
+                emitter.emit(reply)
+                # assistant already persisted
                 return reply
-            if debug:
-                emitter.debug_emit("Empty assistant text; continuing loop", content)
+
+            # If nothing to say, gently prompt the model on next loop (no tools)
+            continue_blocks = [{"text": "(continue)"}]
+            history.append({"role": "user", "content": continue_blocks})
+            save_user_bedrock_style(connection_id, continue_blocks)
             continue
 
-        # -------------- process tool calls -------------
+        # ===== Tool invocation phase =====
         tool_result_blocks: List[Dict[str, Any]] = []
+
         for tu in tool_uses:
             name = tu.get("name")
             inp = tu.get("input") or {}
             tool_use_id = tu.get("toolUseId")
-
-            if debug:
-                emitter.debug_emit("Tool call", {"name": name, "input": inp})
+            emitter.debug_emit("[TOOL CALL]", {"name": name, "input": inp})
 
             try:
                 result = dispatch(name, connection_id, inp)
-                if debug:
-                    emitter.debug_emit(f"Tool result - {name}", result)
+                emitter.debug_emit(f"Tool result - {name}", result)
+                preview_text = _preview_tool_result(result, max_lines=40, max_line_chars=200)
+            except Exception as e:
+                err_payload = {"error": str(e)}
+                emitter.debug_emit("Tool error", err_payload)
+                preview_text = _preview_tool_result(err_payload, max_lines=40, max_line_chars=200)
 
-                # ---------- update memory ----------
-                if name == "extract_user_prefs" and isinstance(result, dict):
-                    state["preferences"].update(result)
-                elif name == "fetch_cars_of_year":
-                    cars = []
-                    if isinstance(result, dict):
-                        cars = result.get("cars") or result.get("models") or result.get("vehicles") or []
-                    elif isinstance(result, list) and result and isinstance(result[0], dict):
-                        inner = result[0].get("json") if "json" in result[0] else result[0]
-                        if isinstance(inner, dict):
-                            cars = inner.get("cars") or inner.get("models") or inner.get("vehicles") or []
-                    if isinstance(cars, list):
-                        state["cars"].extend(cars)
-                elif name == "fetch_safety_ratings":
-                    state["ratings"].append(result)
-                elif name == "fetch_gas_mileage":
-                    state["gas_data"].append(result)
+            content_blocks = [{"text": preview_text}]
 
-                # ---------- normalize tool result ----
-                if isinstance(result, list) and result and isinstance(result[0], dict) and ("json" in result[0] or "text" in result[0]):
-                    content_blocks = result
-                elif isinstance(result, dict):
-                    content_blocks = [{"json": result}]
-                elif isinstance(result, str):
-                    content_blocks = [{"text": result}]
-                else:
-                    content_blocks = [{"json": json_safe(result)}]
-
-                tool_result_blocks.append({
+            tool_result_blocks.append(
+                {
                     "toolResult": {
                         "toolUseId": tool_use_id,
                         "content": content_blocks,
                     }
-                })
-            except Exception as e:
-                err = f"Tool '{name}' failed: {e}"
-                if debug:
-                    emitter.debug_emit("Tool error", err)
-                tool_result_blocks.append({
-                    "toolResult": {
-                        "toolUseId": tool_use_id,
-                        "content": [{"text": err}],
-                    }
-                })
+                }
+            )
 
-        save_working_state(connection_id, state)
-        if debug:
-            emitter.debug_emit("Updated working memory snapshot", mem_summary)
+        # Hard guard: never send more toolResult blocks than toolUse blocks
+        if len(tool_result_blocks) > len(tool_uses):
+            tool_result_blocks = tool_result_blocks[: len(tool_uses)]
 
-        messages.append({"role": "user", "content": tool_result_blocks})
+        # Append ONE user message with all toolResult blocks for this turn,
+        # and DO NOT append a '(continue)' user message after it.
+        if tool_result_blocks:
+            user_tool_result_entry = {"role": "user", "content": tool_result_blocks}
+            history.append(user_tool_result_entry)
+            save_user_bedrock_style(connection_id, tool_result_blocks)
 
-    # ---------------- fallback ------------------------
-    fallback = (
-        "Here’s what I’ve gathered so far based on available data. "
-        "You can start a new chat for more details."
-    )
-    emitter.emit(fallback)
-    save_working_state(connection_id, state)
-    return fallback
+        # Now the next iteration (Turn + 1) will call converse() with
+        # `history` ending in that toolResult user message as Bedrock expects.
 
-# =====================================================
+    return "Error"
+
+
+# ==========================
 # ENTRY POINT
-# =====================================================
-
+# ==========================
 def call_bedrock(connection_id: str, apigw):
+    """Entry point called from Lambda — orchestrates one round using only transcript memory."""
     tool_info = tool_specs()
     tools = tool_info["tool_config"]["tools"]
     specs = tool_info["specs"]
 
     system_prompt = _build_system_prompt(specs)
-    messages = build_history_messages(connection_id)
     emitter = Emitter(apigw, connection_id)
 
     if debug:
         emitter.debug_emit("Starting call_bedrock", {"connection_id": connection_id})
 
-    return slow_path(connection_id, messages, system_prompt, tools, emitter)
+    return slow_path(connection_id, system_prompt, tools, emitter)

@@ -1,18 +1,19 @@
 # tools/__init__.py
 from typing import Any, Dict, List
 
-# ✅ Use relative imports inside the package
 from . import (
-    fetch_cars_of_year,
-    fetch_gas_mileage,      # make sure the tool module is named with "_mileage"
+    fetch_models_of_make_year,
+    fetch_gas_mileage,
     fetch_safety_ratings,
+    fetch_all_makes
 )
 
 # Each module must expose: SPEC: {"toolSpec": {...}}, and handle(connection_id, input)
 ALL_TOOLS = [
-    fetch_cars_of_year,
+    fetch_models_of_make_year,
     fetch_gas_mileage,
     fetch_safety_ratings,
+    fetch_all_makes,
 ]
 
 # (Optional) sanity check for duplicate names

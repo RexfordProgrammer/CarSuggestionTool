@@ -5,7 +5,6 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "@/styles/style.css";
 
-
 type Msg = { role: "user" | "bot" | "system"; text: string };
 
 function MarkdownMessage({
@@ -30,6 +29,9 @@ function App() {
   const [connected, setConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
+  // NEW → ref for chat window
+  const chatWindowRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const token =
       localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token");
@@ -46,7 +48,7 @@ function App() {
 
     socket.onopen = () => {
       setConnected(true);
-      setMessages([{ role: "system", text: " Connected to Car Suggestion Tool" }]);
+      setMessages([{ role: "system", text: "Connected to Car Suggestion Tool" }]);
     };
 
     socket.onmessage = (event) => {
@@ -67,6 +69,17 @@ function App() {
     return () => socket.close();
   }, []);
 
+  // NEW → Auto-scroll effect
+  useEffect(() => {
+    const chatDiv = chatWindowRef.current;
+    if (chatDiv) {
+      chatDiv.scrollTo({
+        top: chatDiv.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages]);
+
   const sendMessage = () => {
     if (socketRef.current && connected && input.trim() !== "") {
       const payload = JSON.stringify({ action: "sendMessage", text: input.trim() });
@@ -83,7 +96,11 @@ function App() {
       <section className="card futuristic-card max-w-[1200px] w-[90%] h-[90vh] flex flex-col">
         <h1 className="glow mb-3 text-center text-3xl">Car Suggestion Tool</h1>
 
-        <div className="chat-window flex-1 border rounded p-4 overflow-y-auto bg-black/30 text-black text-lg space-y-3">
+        {/* ADD ref={chatWindowRef} */}
+        <div
+          ref={chatWindowRef}
+          className="chat-window flex-1 border rounded p-4 overflow-y-auto bg-black/30 text-black text-lg space-y-3"
+        >
           {messages.map((msg, i) => {
             const prefix =
               msg.role === "user" ? "**You:** " : msg.role === "bot" ? "**Bot:** " : "";
@@ -92,7 +109,7 @@ function App() {
                 key={i}
                 className={
                   msg.role === "bot"
-                    ? "text-Black"
+                    ? "text-black"
                     : msg.role === "user"
                     ? "text-gray-900"
                     : "text-gray-900 italic"
@@ -116,7 +133,12 @@ function App() {
             placeholder={connected ? "Type your message…" : "Not connected"}
             disabled={!connected}
           />
-          <button className="btn px-6 text-lg" type="button" onClick={sendMessage} disabled={!connected}>
+          <button
+            className="btn px-6 text-lg"
+            type="button"
+            onClick={sendMessage}
+            disabled={!connected}
+          >
             Send
           </button>
         </div>

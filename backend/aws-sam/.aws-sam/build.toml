@@ -36,15 +36,6 @@ manifest_hash = "714a8135cc4a35e39acb31147488c689"
 packagetype = "Zip"
 functions = ["OnLoginFunction"]
 
-[function_build_definitions.841e72ad-3c71-420b-a1fa-87dd43ae8774]
-codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\lambdas\\on_send_message"
-runtime = "python3.12"
-architecture = "x86_64"
-handler = "lambda_function.lambda_handler"
-manifest_hash = "0eb75e85cb201492a0fa9ff7e8cf2deb"
-packagetype = "Zip"
-functions = ["OnSendMessageFunction"]
-
 [function_build_definitions.97072d33-b06b-4e20-acf8-0f5746434242]
 codeuri = "C:\\Users\\Rexford\\Documents\\CarSuggestionTool\\backend\\aws-sam\\lambdas\\on_send_message_v3"
 runtime = "python3.12"

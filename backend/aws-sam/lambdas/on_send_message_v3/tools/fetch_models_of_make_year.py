@@ -4,8 +4,8 @@ from typing import Dict, List, Any
 
 SPEC = {
     "toolSpec": {
-        "name": "fetch_cars_of_year",
-        "description": "Used to get cars from a particular year",
+        "name": "fetch_models_of_make_year",
+        "description": "Used to get models of a particular make from a particular year",
         "inputSchema": {
             "json": {
                 "type": "object",

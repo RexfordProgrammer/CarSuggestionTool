@@ -7,156 +7,220 @@ table = dynamodb.Table("messages")
 preferenceTable = dynamodb.Table("session-preferences")
 memoryTable = dynamodb.Table("session-memory")
 
+# ==========================
+# Line-clipping utilities
+# ==========================
+_MAX_LINES = 10          # hard cap on lines per block
+_MAX_LINE_CHARS = 200    # optional: cap width so lines don’t get huge
 
+def _clip_text_lines(s: str, max_lines: int = _MAX_LINES, max_line_chars: int = _MAX_LINE_CHARS) -> str:
+    """Clip a string to at most `max_lines`, truncating overly long lines."""
+    lines = s.splitlines()
+    clipped = []
+    for line in lines[:max_lines]:
+        if max_line_chars and len(line) > max_line_chars:
+            clipped.append(line[:max_line_chars] + "…")
+        else:
+            clipped.append(line)
+    if len(lines) > max_lines:
+        clipped.append(f"... [truncated to {max_lines} lines]")
+    return "\n".join(clipped)
+
+def _normalize_to_blocks(content: Any) -> List[Dict[str, Any]]:
+    """Normalize arbitrary content into Bedrock-style blocks."""
+    if isinstance(content, list):
+        return content
+    if isinstance(content, str):
+        return [{"text": content}]
+    return [{"text": str(content)}]
+
+def _clip_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Enforce ≤ max lines per block.
+    - 'text' blocks: clip lines.
+    - 'json' blocks: convert to pretty JSON string and clip lines (as 'text').
+    - Other block types pass through unchanged (rare).
+    """
+    out: List[Dict[str, Any]] = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            out.append({"text": _clip_text_lines(str(b))})
+            continue
+
+        if "text" in b:
+            out.append({"text": _clip_text_lines(str(b.get("text", "")))})
+        elif "json" in b:
+            try:
+                pretty = json.dumps(b["json"], ensure_ascii=False, indent=2, default=str)
+            except Exception:
+                pretty = str(b["json"])
+            out.append({"text": _clip_text_lines(pretty)})
+        else:
+            # Unknown block shape; stringify and clip
+            out.append({"text": _clip_text_lines(json.dumps(b, ensure_ascii=False, default=str))})
+    return out
+
+def _clip_tool_result_blocks(tool_result_blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    For toolResult messages, clip each inner content block to ≤ max lines.
+    Converts json blocks to text previews to enforce line limits.
+    """
+    clipped: List[Dict[str, Any]] = []
+    for item in tool_result_blocks or []:
+        if not isinstance(item, dict) or "toolResult" not in item:
+            # Defensive: if malformed, stringify and clip
+            clipped.append({"toolResult": {"toolUseId": "unknown", "content": [{"text": _clip_text_lines(str(item))}]}})
+            continue
+        tr = item["toolResult"] or {}
+        use_id = tr.get("toolUseId", "unknown")
+        content_blocks = tr.get("content", [])
+        content_blocks = _clip_blocks(_normalize_to_blocks(content_blocks))
+        clipped.append({"toolResult": {"toolUseId": use_id, "content": content_blocks}})
+    return clipped
+
+# ==========================
+# Session transcript
+# ==========================
 def get_session_messages(connection_id):
     """Return a list of messages for a given WebSocket connection."""
     response = table.get_item(Key={"connectionId": connection_id})
     item = response.get("Item")
     return item.get("messages", []) if item else []
 
-
 def save_user_message(usermessage, connection_id):
-    """Append a user message to the session's message list."""
-    entry = {"role": "user", "content": usermessage}
+    """Append a user message to the session's message list (Bedrock format), clipped to ≤10 lines per block."""
+    blocks = _normalize_to_blocks(usermessage)
+    blocks = _clip_blocks(blocks)
+    entry = {"role": "user", "content": blocks}
     table.update_item(
         Key={"connectionId": connection_id},
-        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
-        ExpressionAttributeValues={
-            ":new_message": [entry],
-            ":empty_list": [],
-        },
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty), :new)",
+        ExpressionAttributeValues={":empty": [], ":new": [entry]},
     )
-
 
 def save_bot_response(botmessage, connection_id):
-    """Append a bot (assistant) response to the session's message list."""
-    entry = {"role": "assistant", "content": botmessage}
+    """Append an assistant message to the session's message list, clipped to ≤10 lines per block."""
+    blocks = _normalize_to_blocks(botmessage)
+    blocks = _clip_blocks(blocks)
+    entry = {"role": "assistant", "content": blocks}
     table.update_item(
         Key={"connectionId": connection_id},
-        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty_list), :new_message)",
-        ExpressionAttributeValues={
-            ":new_message": [entry],
-            ":empty_list": [],
-        },
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty), :new)",
+        ExpressionAttributeValues={":empty": [], ":new": [entry]},
     )
 
-
-def initialize_user_preference(sessionid):
-    """Create a new preferences entry if it doesn't already exist."""
-    preferenceTable.put_item(
-        Item={
-            "preferenceKey": sessionid,
-            "vehicle_type": {},
-            "drive_train": {},
-            "num_of_seating": {},
-            "overall_stars": {}
-        }
+def save_user_continue(connection_id):
+    """Append a (continue) message in Bedrock format (already single-line)."""
+    entry = {"role": "user", "content": [{"text": "(continue)"}]}
+    table.update_item(
+        Key={"connectionId": connection_id},
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty), :new)",
+        ExpressionAttributeValues={":empty": [], ":new": [entry]},
     )
 
-
-def save_user_preference(sessionid, preference):
-    """Store or overwrite user preferences."""
-    # You can store as raw dict (recommended) or JSON string if you prefer
-    preferenceTable.update_item(
-        Key={"preferenceKey": sessionid},
-        UpdateExpression="SET vehicle_type=:new_preferences, drive_train=:new_drive_train, num_of_seating=:new_num_of_seating, overall_stars=:new_overall_stars",
-        ExpressionAttributeValues={
-            ":new_preferences": preference,
-        },
-        ReturnValues="UPDATED_NEW",
+def save_user_tool_result_message(connection_id: str, tool_result_blocks: list) -> None:
+    """
+    Append a Bedrock-compliant toolResult message, with each inner content block clipped to ≤10 lines.
+    """
+    clipped_tool_results = _clip_tool_result_blocks(tool_result_blocks)
+    entry = {"role": "user", "content": clipped_tool_results}
+    table.update_item(
+        Key={"connectionId": connection_id},
+        UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty), :new)",
+        ExpressionAttributeValues={":empty": [], ":new": [entry]},
     )
 
-
-def get_user_preferences(sessionid):
-    """Retrieve user preferences for a given session."""
-    response = preferenceTable.get_item(Key={"preferenceKey": sessionid})
-    item = response.get("Item")
-    return item.get("preferences", {}) if item else {}
-
-
-def get_working_state(connection_id):
-    """Retrieve the agent's working memory snapshot for this session, with built-in defaults."""
-    default_state = {
-        "preferences": {},
-        "cars": [],
-        "ratings": [],
-        "gas_data": [],
-    }
-
+def summarize_thoughts(thoughts: Any, max_thoughts: int = 5, max_thought_length: int = 800) -> str:
     try:
-        response = table.get_item(Key={"connectionId": connection_id})
-        item = response.get("Item")
+        if isinstance(thoughts, dict):
+            if "thoughts" in thoughts and isinstance(thoughts["thoughts"], list):
+                thoughts_list = thoughts["thoughts"]
+            else:
+                thoughts_list = list(thoughts.values())
+        elif isinstance(thoughts, list):
+            thoughts_list = thoughts
+        else:
+            thoughts_list = [str(thoughts)]
 
-        # If there's a stored state, merge it with defaults (to ensure all keys exist)
-        if item and "working_state" in item:
-            stored_state = item["working_state"]
-            # Merge: stored values override defaults
-            return {**default_state, **stored_state}
+        recent = thoughts_list[-max_thoughts:]
+        formatted = []
+        for i, t in enumerate(recent, start=1):
+            if isinstance(t, (dict, list)):
+                t_str = json.dumps(t, ensure_ascii=False, default=str)
+            else:
+                t_str = str(t)
+            if len(t_str) > max_thought_length:
+                t_str = t_str[:max_thought_length] + " ... [truncated]"
+            formatted.append(f"[{i}] {t_str}")
+        return "\n".join(formatted) if formatted else "(no prior results)"
     except Exception as e:
-        print(f"Error loading working state: {e}")
+        return f"(error summarizing thoughts: {e})"
 
-    return default_state
-
-def _truncate_state(state: Dict[str, Any], max_items: int = 10, max_chars: int = 2000) -> Dict[str, Any]:
-    """
-    Safely trim oversized working state before persisting to DynamoDB.
-    Prevents large payloads (e.g., full vehicle lists) from breaking LLM calls.
-    """
-    state = dict(state or {})
-
-    # --- Trim long lists like cars, ratings, gas_data ---
-    for key in ("cars", "ratings", "gas_data"):
-        val = state.get(key)
-        if isinstance(val, list) and len(val) > max_items:
-            state[key] = val[:max_items]
-            state[f"{key}_summary"] = f"{len(val)} total items (showing first {max_items})"
-            print(f"⚠️ Truncated {key}: kept {max_items} of {len(val)} items")
-
-    # --- Trim large text blobs inside preferences ---
-    prefs = state.get("preferences", {})
-    if isinstance(prefs, dict):
-        total_len = sum(len(str(v)) for v in prefs.values())
-        if total_len > max_chars:
-            short_prefs = {k: (str(v)[:100] + "…") for k, v in prefs.items()}
-            state["preferences"] = short_prefs
-            state["preferences_summary"] = f"Preferences truncated ({len(prefs)} fields)"
-            print(f"⚠️ Truncated preferences: total length {total_len} chars")
-
-    return state
-
-
-def save_working_state(connection_id: str, state: Dict[str, Any]) -> None:
-    """
-    Persist the agent's current working memory (e.g., preferences, cars, ratings)
-    after truncating large fields to prevent oversized DynamoDB entries.
-    """
-    try:
-        safe_state = _truncate_state(state)
-        table.update_item(
-            Key={"connectionId": connection_id},
-            UpdateExpression="SET working_state = :s",
-            ExpressionAttributeValues={":s": safe_state},
-        )
-    except Exception as e:
-        print(f"❌ Error saving working state: {e}")
-
-# def save_working_state(connection_id, state):
-#     """Persist the agent's current working memory (e.g. preferences, cars, ratings)."""
-#     try:
-#         table.update_item(
-#             Key={"connectionId": connection_id},
-#             UpdateExpression="SET working_state = :s",
-#             ExpressionAttributeValues={":s": state},
-#         )
-#     except Exception as e:
-#         print(f"Error saving working state: {e}")
-
+# ==========================
+# History rebuild (unchanged)
+# ==========================
 def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
+    """Reconstruct messages into valid Bedrock format from storage."""
     raw = get_session_messages(connection_id) or []
     msgs: List[Dict[str, Any]] = []
     for m in raw:
         role = m.get("role")
         content = m.get("content")
-        if role in ("user", "assistant") and isinstance(content, str):
+        if role not in ("user", "assistant"):
+            continue
+        if isinstance(content, list):
+            msgs.append({"role": role, "content": content})
+        elif isinstance(content, str):
             msgs.append({"role": role, "content": [{"text": content}]})
+        else:
+            msgs.append({"role": role, "content": [{"text": str(content)}]})
     return msgs
+
+def save_tool_response(name: str, result: Any, connection_id: str) -> None:
+    entry = {"tool": str(name), "result": result}
+    table.update_item(
+        Key={"connectionId": connection_id},
+        UpdateExpression="SET tool_responses = list_append(if_not_exists(tool_responses, :empty), :new)",
+        ExpressionAttributeValues={":empty": [], ":new": [entry]},
+    )
+
+def get_tool_responses(
+    connection_id: str,
+    overall_max_chars: int = 12000,
+    per_response_max_chars: int = 800
+) -> str:
+    try:
+        res = table.get_item(Key={"connectionId": connection_id})
+        item = res.get("Item", {}) or {}
+        responses = item.get("tool_responses", []) or []
+    except Exception as e:
+        return f"(error loading tool responses: {e})"
+
+    if not responses:
+        return "(no tool responses)"
+
+    lines: List[str] = []
+    total_len = 0
+    for idx, r in enumerate(responses, start=1):
+        tool_name = str(r.get("tool", "unknown"))
+        payload = r.get("result")
+        try:
+            if isinstance(payload, (dict, list)):
+                payload_str = json.dumps(payload, ensure_ascii=False, default=str)
+            else:
+                payload_str = str(payload)
+        except Exception:
+            payload_str = str(payload)
+
+        if len(payload_str) > per_response_max_chars:
+            payload_str = payload_str[:per_response_max_chars] + " ... [truncated]"
+
+        block = f"[{idx}] {tool_name}: {payload_str}"
+        if total_len + len(block) + 1 > overall_max_chars:
+            lines.append("... [overall tool responses truncated]")
+            break
+
+        lines.append(block)
+        total_len += len(block) + 1
+
+    return "\n".join(lines)

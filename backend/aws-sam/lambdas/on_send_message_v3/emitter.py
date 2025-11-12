@@ -1,15 +1,16 @@
-# emitter.py
 import os, json, requests, boto3
 from dynamo_db_helpers import save_bot_response
 
 # Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000
 
+
 def _safe_json(obj) -> str:
     try:
         return json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
         return str(obj)
+
 
 class Emitter:
     def __init__(self, apigw=None, connection_id=None, domain=None, stage=None):
@@ -42,22 +43,18 @@ class Emitter:
             return data
 
         if isinstance(data, dict):
-            # Common textual keys
             for key in ("reply", "text", "message", "output"):
                 val = data.get(key)
                 if isinstance(val, str):
                     return val
-            # Bedrock-style message content
             if isinstance(data.get("content"), list):
                 parts = []
                 for c in data["content"]:
                     if isinstance(c, str):
                         parts.append(c)
                     elif isinstance(c, dict):
-                        # Try text-ish fields then fall back to json
                         parts.append(c.get("text") or c.get("body") or _safe_json(c))
                 return " ".join(p for p in parts if p)
-            # Fallback: stringify whole object
             return _safe_json(data)
 
         if isinstance(data, (list, tuple)):
@@ -65,6 +62,7 @@ class Emitter:
 
         return str(data)
 
+    # --- local send ---
     def _send_local(self, payload: dict) -> bool:
         url = f"{self.local_ws_url}/@connections/{self.connection_id}"
         try:
@@ -77,6 +75,7 @@ class Emitter:
             print(f"❌ Local emit failed: {e}")
             return False
 
+    # --- remote send ---
     def _send_remote(self, payload: dict) -> bool:
         data_bytes = _safe_json(payload).encode("utf-8")
         try:
@@ -90,14 +89,23 @@ class Emitter:
             print(f"❌ Remote emit failed: {e}")
             return False
 
+    # --- shared send ---
     def _send_payload(self, payload: dict) -> bool:
         """Send payload either locally or via API GW."""
+        try:
+            print("🪵 [FULL EMIT LOG] →", _safe_json(payload))
+        except Exception as e:
+            print(f"⚠️ Failed to log payload: {e}")
+
         if self.local_ws_url:
             return self._send_local(payload)
         return self._send_remote(payload)
 
+    # ==========================================================
+    # NORMAL EMIT (user-facing + persisted)
+    # ==========================================================
     def emit(self, text) -> bool:
-        """Emit to WebSocket (local or remote). Returns True on success."""
+        """Emit to WebSocket (local or remote), and persist response."""
         try:
             text_str = self._to_text(text).strip()
         except Exception as e:
@@ -105,33 +113,29 @@ class Emitter:
             return False
 
         if not text_str:
-            # Nothing to send
             return False
 
-        # Persist, but don't let failures block sending
+        print(f"\n🪵 [EMIT RAW TEXT - {len(text_str)} chars]\n{text_str}\n")
+
+        # Persist for chat history
         try:
             save_bot_response(text_str, self.connection_id)
         except Exception as e:
             print(f"⚠️ save_bot_response failed (continuing): {e}")
 
-        # Frame-size guard & chunking
-        # Note: We chunk the 'reply' only; the wrapper JSON is tiny.
-        # Keep chunks aligned to byte limit, not char count.
         reply_bytes = text_str.encode("utf-8")
         chunks = []
         if len(reply_bytes) > _MAX_FRAME_BYTES:
-            # Split into multiple frames
             start = 0
             idx = 1
             total = (len(reply_bytes) + _MAX_FRAME_BYTES - 1) // _MAX_FRAME_BYTES
             while start < len(reply_bytes):
                 end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
                 chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
-                payload = {
+                chunks.append({
                     "type": "bedrock_reply",
                     "reply": f"[{idx}/{total}] {chunk_text}",
-                }
-                chunks.append(payload)
+                })
                 start = end
                 idx += 1
         else:
@@ -142,3 +146,38 @@ class Emitter:
             sent = self._send_payload(payload)
             ok_all = ok_all and sent
         return ok_all
+    
+    # ==========================================================
+    # DEBUG EMIT (identical WS shape, no DB save)
+    # ==========================================================
+    def debug_emit(self, label: str, data) -> None:
+        """Emit debug info to the chat the same way as normal output, but skip DynamoDB."""
+        try:
+            text = f"[DEBUG] {label}:\n" + json.dumps(data, indent=2, default=str)
+        except Exception:
+            text = f"[DEBUG] {label}:\n" + str(data)
+
+        # console log
+        print(f"\n🪵 {text}\n")
+
+        # ---- send to WS exactly like emit(), but NO save_bot_response ----
+        reply_bytes = text.encode("utf-8")
+        chunks = []
+        if len(reply_bytes) > _MAX_FRAME_BYTES:
+            start = 0
+            idx = 1
+            total = (len(reply_bytes) + _MAX_FRAME_BYTES - 1) // _MAX_FRAME_BYTES
+            while start < len(reply_bytes):
+                end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
+                chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
+                chunks.append({
+                    "type": "bedrock_reply",
+                    "reply": f"[{idx}/{total}] {chunk_text}",
+                })
+                start = end
+                idx += 1
+        else:
+            chunks.append({"type": "bedrock_reply", "reply": text})
+
+        for payload in chunks:
+            self._send_payload(payload)

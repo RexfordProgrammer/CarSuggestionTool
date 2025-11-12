@@ -97,16 +97,59 @@ def get_working_state(connection_id):
 
     return default_state
 
-def save_working_state(connection_id, state):
-    """Persist the agent's current working memory (e.g. preferences, cars, ratings)."""
+def _truncate_state(state: Dict[str, Any], max_items: int = 10, max_chars: int = 2000) -> Dict[str, Any]:
+    """
+    Safely trim oversized working state before persisting to DynamoDB.
+    Prevents large payloads (e.g., full vehicle lists) from breaking LLM calls.
+    """
+    state = dict(state or {})
+
+    # --- Trim long lists like cars, ratings, gas_data ---
+    for key in ("cars", "ratings", "gas_data"):
+        val = state.get(key)
+        if isinstance(val, list) and len(val) > max_items:
+            state[key] = val[:max_items]
+            state[f"{key}_summary"] = f"{len(val)} total items (showing first {max_items})"
+            print(f"⚠️ Truncated {key}: kept {max_items} of {len(val)} items")
+
+    # --- Trim large text blobs inside preferences ---
+    prefs = state.get("preferences", {})
+    if isinstance(prefs, dict):
+        total_len = sum(len(str(v)) for v in prefs.values())
+        if total_len > max_chars:
+            short_prefs = {k: (str(v)[:100] + "…") for k, v in prefs.items()}
+            state["preferences"] = short_prefs
+            state["preferences_summary"] = f"Preferences truncated ({len(prefs)} fields)"
+            print(f"⚠️ Truncated preferences: total length {total_len} chars")
+
+    return state
+
+
+def save_working_state(connection_id: str, state: Dict[str, Any]) -> None:
+    """
+    Persist the agent's current working memory (e.g., preferences, cars, ratings)
+    after truncating large fields to prevent oversized DynamoDB entries.
+    """
     try:
+        safe_state = _truncate_state(state)
         table.update_item(
             Key={"connectionId": connection_id},
             UpdateExpression="SET working_state = :s",
-            ExpressionAttributeValues={":s": state},
+            ExpressionAttributeValues={":s": safe_state},
         )
     except Exception as e:
-        print(f"Error saving working state: {e}")
+        print(f"❌ Error saving working state: {e}")
+
+# def save_working_state(connection_id, state):
+#     """Persist the agent's current working memory (e.g. preferences, cars, ratings)."""
+#     try:
+#         table.update_item(
+#             Key={"connectionId": connection_id},
+#             UpdateExpression="SET working_state = :s",
+#             ExpressionAttributeValues={":s": state},
+#         )
+#     except Exception as e:
+#         print(f"Error saving working state: {e}")
 
 def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
     raw = get_session_messages(connection_id) or []

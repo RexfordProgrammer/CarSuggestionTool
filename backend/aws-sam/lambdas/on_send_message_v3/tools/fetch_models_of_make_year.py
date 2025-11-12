@@ -1,5 +1,4 @@
 import requests
-import json
 from typing import Dict, List, Any
 
 SPEC = {
@@ -21,20 +20,25 @@ SPEC = {
 
 
 def _fetch_from_nhtsa(year: int, make: str = "Toyota") -> List[Dict[str, Any]]:
-    """Fetch models for a given make/year."""
-    url = f"https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/{make}/modelyear/{year}?format=json"
+    """Fetch models for a given make/year. Returns only make + model."""
+    url = (
+        f"https://vpic.nhtsa.dot.gov/api/vehicles/"
+        f"GetModelsForMakeYear/make/{make}/modelyear/{year}?format=json"
+    )
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        results = data.get("Results", [])
+        results = data.get("Results", []) or []
+
+        # Only keep Make_Name and Model_Name, NEVER Model_ID
         return [
             {
                 "Make_Name": r.get("Make_Name"),
                 "Model_Name": r.get("Model_Name"),
-                "Model_ID": r.get("Model_ID"),
             }
             for r in results
+            if r.get("Model_Name")
         ]
     except Exception as e:
         print(f"Error fetching data from NHTSA: {e}")
@@ -43,6 +47,32 @@ def _fetch_from_nhtsa(year: int, make: str = "Toyota") -> List[Dict[str, Any]]:
 
 def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
     year = int(tool_input.get("year"))
-    make = tool_input.get("make", "Toyota")  # default make
+    make = tool_input.get("make", "Toyota")
+
     cars = _fetch_from_nhtsa(year, make)
-    return [{"json": {"year": year, "make": make, "count": len(cars), "vehicles": cars[:100]}}]
+
+    if not cars:
+        # Explicit “no results” case
+        return [
+            {
+                "json": {
+                    "year": year,
+                    "make": make,
+                    "count": 0,
+                    "vehicles": [],
+                    "message": f"No models found for make='{make}' in year={year}.",
+                }
+            }
+        ]
+
+    # Normal case
+    return [
+        {
+            "json": {
+                "year": year,
+                "make": make,
+                "count": len(cars),
+                "vehicles": cars[:100],  # still capped at 100
+            }
+        }
+    ]

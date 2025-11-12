@@ -3,7 +3,7 @@ from dynamo_db_helpers import save_bot_response
 
 # Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000
-debug = True
+DEBUG = False
 
 def _safe_json(obj) -> str:
     try:
@@ -151,7 +151,7 @@ class Emitter:
     # DEBUG EMIT (identical WS shape, no DB save)
     # ==========================================================
     def debug_emit(self, label: str, data) -> None:
-        if (not debug):
+        if (not DEBUG):
             return
         """Emit debug info to the chat the same way as normal output, but skip DynamoDB."""
         try:

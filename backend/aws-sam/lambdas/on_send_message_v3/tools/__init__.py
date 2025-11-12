@@ -5,7 +5,6 @@ from . import (
     fetch_models_of_make_year,
     fetch_gas_mileage,
     fetch_safety_ratings,
-    fetch_all_makes
 )
 
 # Each module must expose: SPEC: {"toolSpec": {...}}, and handle(connection_id, input)
@@ -13,7 +12,6 @@ ALL_TOOLS = [
     fetch_models_of_make_year,
     fetch_gas_mileage,
     fetch_safety_ratings,
-    fetch_all_makes,
 ]
 
 # (Optional) sanity check for duplicate names

@@ -1,10 +1,9 @@
-# bedrock_caller.py
 import os
 import json
 from typing import List, Dict, Any
+from decimal import Decimal
 import boto3
 import botocore
-from decimal import Decimal
 
 from dynamo_db_helpers import get_session_messages
 from db_tools import (
@@ -30,8 +29,8 @@ bedrock = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
-debug = True
-MAX_TURNS = int(os.getenv("MAX_TURNS", "3"))
+DEBUG = True
+MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
 HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 
 
@@ -69,20 +68,6 @@ def _to_native_json(obj):
     if isinstance(obj, (bytes, bytearray)):
         return obj.decode("utf-8", errors="replace")
     return obj
-
-
-# ==========================
-# HELPERS
-# ==========================
-def _history_window(messages: List[Dict[str, Any]], max_len=HISTORY_WINDOW):
-    """Keep the most recent N messages and ensure the slice starts with a user message when possible."""
-    slice_ = messages[-max_len:]
-    if slice_ and slice_[0].get("role") != "user":
-        for i in range(len(messages) - max_len - 1, -1, -1):
-            if messages[i].get("role") == "user":
-                slice_ = messages[i:]
-                break
-    return slice_
 
 
 def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -140,8 +125,8 @@ def get_chat_history(connection_id: str) -> List[Dict[str, Any]]:
     to the transcript go through db_tools now.
     """
     raw_history = get_session_messages(connection_id) or []
-    windowed = _history_window(raw_history)
-    safe_history = _normalize_messages(windowed)
+    # windowed = _history_window(raw_history)
+    safe_history = _normalize_messages(raw_history)
 
     if needs_continue_nudge(safe_history):
         # Persist a "(continue)" user nudge via db_tools (no tools involved here)
@@ -150,32 +135,19 @@ def get_chat_history(connection_id: str) -> List[Dict[str, Any]]:
             [{"text": "(continue)"}],
         )
         raw_history = get_session_messages(connection_id) or []
-        windowed = _history_window(raw_history)
-        safe_history = _normalize_messages(windowed)
+        # windowed = _history_window(raw_history)
+        safe_history = _normalize_messages(raw_history)
 
     return safe_history
 
 
-# ==========================
-# MAIN ORCHESTRATION
-# ==========================
-def slow_path(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]], emitter: Emitter):
-    """
-    Orchestrate up to MAX_TURNS of tool-using conversation.
-
-    INVARIANT:
-    - For every `toolResult` user message we send, there is an immediately preceding
-      assistant message in `history` that contains the matching `toolUse` blocks.
-    - We never submit more `toolResult` blocks than the number of `toolUse` blocks
-      in that previous assistant message.
-    - When sending tool results, the *last* user message in `messages` consists
-      only of `toolResult` blocks (no extra text turns like '(continue)' after).
-    """
+def main_orchestration(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]], emitter: Emitter):
+    '''MAIN ORCHESTRATION'''
     history: List[Dict[str, Any]] = get_chat_history(connection_id)
 
     for turn in range(MAX_TURNS):
         system_blocks = [{"text": system_prompt}]
-        if debug:
+        if DEBUG:
             emitter.debug_emit(f"Turn {turn + 1} - ", "Sending System Prompt")
 
         payload = {
@@ -206,7 +178,7 @@ def slow_path(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]
         tool_uses = extract_tool_uses(content)
         assistant_texts = extract_text_chunks(content)
 
-        if debug:
+        if DEBUG:
             emitter.debug_emit("Tool Uses:", tool_uses)
             emitter.debug_emit("Assistant Texts Uses:", assistant_texts)
 
@@ -264,10 +236,16 @@ def slow_path(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]
             history.append(user_tool_result_entry)
             save_user_bedrock_style(connection_id, tool_result_blocks)
 
-        # Now the next iteration (Turn + 1) will call converse() with
-        # `history` ending in that toolResult user message as Bedrock expects.
+        # Next iteration will call converse() again with updated history
 
-    return "Error"
+    # ========= Fallback if we exit the loop with no reply =========
+    fallback = "no more turns"
+    emitter.emit(fallback)
+    append_message_entry(
+        connection_id,
+        {"role": "assistant", "content": [{"text": fallback}]},
+    )
+    return fallback
 
 
 # ==========================
@@ -282,7 +260,7 @@ def call_bedrock(connection_id: str, apigw):
     system_prompt = _build_system_prompt(specs)
     emitter = Emitter(apigw, connection_id)
 
-    if debug:
+    if DEBUG:
         emitter.debug_emit("Starting call_bedrock", {"connection_id": connection_id})
 
-    return slow_path(connection_id, system_prompt, tools, emitter)
+    return main_orchestration(connection_id, system_prompt, tools, emitter)

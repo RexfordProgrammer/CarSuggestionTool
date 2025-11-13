@@ -3,7 +3,7 @@ from dynamo_db_helpers import save_bot_response
 
 # Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000
-DEBUG = False
+DEBUG = True
 
 def _safe_json(obj) -> str:
     try:

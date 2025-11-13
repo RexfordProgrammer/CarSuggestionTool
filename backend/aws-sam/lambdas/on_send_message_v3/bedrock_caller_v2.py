@@ -23,13 +23,13 @@ from emitter import Emitter
 # ==========================
 # CONFIGURATION
 # ==========================
-ORCHESTRATOR_MODEL = os.getenv("MASTER_MODEL", "ai21.jamba-1-5-large-v1:0")
+ORCHESTRATOR_MODEL = "ai21.jamba-1-5-large-v1:0"
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name=os.getenv("AWS_REGION", "us-east-1"),
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
-DEBUG = True
+DEBUG = False
 MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
 HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 
@@ -140,16 +140,30 @@ def get_chat_history(connection_id: str) -> List[Dict[str, Any]]:
 
     return safe_history
 
+# ==========================
+# ENTRY POINT
+# ==========================
+def call_orchestrator(connection_id: str, apigw) -> None:
+    """Entry point called from Lambda — orchestrates one round using only transcript memory."""
+    tool_info = tool_specs()
+    tools = tool_info["tool_config"]["tools"]
+    specs = tool_info["specs"]
 
-def main_orchestration(connection_id: str, system_prompt: str, tools: List[Dict[str, Any]], emitter: Emitter):
-    '''MAIN ORCHESTRATION'''
+    system_prompt = _build_system_prompt(specs)
+    emitter = Emitter(apigw, connection_id)
+
+    if DEBUG:
+        emitter.debug_emit("Starting call_bedrock", {"connection_id": connection_id})
+
     history: List[Dict[str, Any]] = get_chat_history(connection_id)
-
+    
+    ### this begins upon message sent from frontend
     for turn in range(MAX_TURNS):
-        system_blocks = [{"text": system_prompt}]
         if DEBUG:
-            emitter.debug_emit(f"Turn {turn + 1} - ", "Sending System Prompt")
-
+            emitter.debug_emit("Turn: ", turn)
+        ## these blocks are passed to the bedrock converse as a package
+        system_blocks = [{"text": system_prompt}]
+        ## builds payload for the model
         payload = {
             "modelId": ORCHESTRATOR_MODEL,
             "system": system_blocks,
@@ -168,7 +182,7 @@ def main_orchestration(connection_id: str, system_prompt: str, tools: List[Dict[
                 connection_id,
                 {"role": "assistant", "content": [{"text": err}]},
             )
-            return err
+            break
 
         # Persist assistant (including any toolUse blocks)
         assistant_entry = save_assistant_from_bedrock_resp(connection_id, resp)
@@ -181,50 +195,52 @@ def main_orchestration(connection_id: str, system_prompt: str, tools: List[Dict[
         if DEBUG:
             emitter.debug_emit("Tool Uses:", tool_uses)
             emitter.debug_emit("Assistant Texts Uses:", assistant_texts)
-
+        
         # ===== Normal conversational reply (no toolUse) OR final turn =====
         if not tool_uses or turn == MAX_TURNS - 1:
+            
             reply = join_clean(assistant_texts)
             if reply:
-                emitter.emit(reply)
                 # assistant already persisted
-                return reply
+                emitter.emit(reply)
+                break
+            else:
+                # If nothing to say, gently prompt the model on next loop (no tools)
+                continue_blocks = [{"text": "(continue)"}]
+                history.append({"role": "user", "content": continue_blocks})
+                save_user_bedrock_style(connection_id, continue_blocks)
+        else:
+            # ===== TOOL PROCESSING =====
+            tool_result_blocks: List[Dict[str, Any]] = []
 
-            # If nothing to say, gently prompt the model on next loop (no tools)
-            continue_blocks = [{"text": "(continue)"}]
-            history.append({"role": "user", "content": continue_blocks})
-            save_user_bedrock_style(connection_id, continue_blocks)
-            continue
+            for tu in tool_uses:
+                name = tu.get("name")
+                inp = tu.get("input") or {}
+                tool_use_id = tu.get("toolUseId")
+                if DEBUG:
+                    emitter.debug_emit("[TOOL CALL]", {"name": name, "input": inp})
+                try:
+                    result = dispatch(name, connection_id, inp)
+                    if DEBUG:
+                        emitter.debug_emit(f"{name} result: ", result)
+                    preview_text = _preview_tool_result(result, max_lines=40, max_line_chars=200)
+                except Exception as e:
+                    err_payload = {"error": str(e)}
+                    if DEBUG:
+                        emitter.debug_emit("Tool error", err_payload)
+                    preview_text = _preview_tool_result(err_payload, max_lines=40, max_line_chars=200)
 
-        # ===== Tool invocation phase =====
-        tool_result_blocks: List[Dict[str, Any]] = []
+                content_blocks = [{"text": preview_text}]
 
-        for tu in tool_uses:
-            name = tu.get("name")
-            inp = tu.get("input") or {}
-            tool_use_id = tu.get("toolUseId")
-            emitter.debug_emit("[TOOL CALL]", {"name": name, "input": inp})
-
-            try:
-                result = dispatch(name, connection_id, inp)
-                emitter.debug_emit(f"Tool result - {name}", result)
-                preview_text = _preview_tool_result(result, max_lines=40, max_line_chars=200)
-            except Exception as e:
-                err_payload = {"error": str(e)}
-                emitter.debug_emit("Tool error", err_payload)
-                preview_text = _preview_tool_result(err_payload, max_lines=40, max_line_chars=200)
-
-            content_blocks = [{"text": preview_text}]
-
-            tool_result_blocks.append(
-                {
-                    "toolResult": {
-                        "toolUseId": tool_use_id,
-                        "content": content_blocks,
+                tool_result_blocks.append(
+                    {
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": content_blocks,
+                        }
                     }
-                }
-            )
-
+                )
+        ### POST TOOL PROCESSING
         # Hard guard: never send more toolResult blocks than toolUse blocks
         if len(tool_result_blocks) > len(tool_uses):
             tool_result_blocks = tool_result_blocks[: len(tool_uses)]
@@ -238,29 +254,10 @@ def main_orchestration(connection_id: str, system_prompt: str, tools: List[Dict[
 
         # Next iteration will call converse() again with updated history
 
-    # ========= Fallback if we exit the loop with no reply =========
-    fallback = "no more turns"
-    emitter.emit(fallback)
-    append_message_entry(
-        connection_id,
-        {"role": "assistant", "content": [{"text": fallback}]},
-    )
-    return fallback
-
-
-# ==========================
-# ENTRY POINT
-# ==========================
-def call_bedrock(connection_id: str, apigw):
-    """Entry point called from Lambda — orchestrates one round using only transcript memory."""
-    tool_info = tool_specs()
-    tools = tool_info["tool_config"]["tools"]
-    specs = tool_info["specs"]
-
-    system_prompt = _build_system_prompt(specs)
-    emitter = Emitter(apigw, connection_id)
-
-    if DEBUG:
-        emitter.debug_emit("Starting call_bedrock", {"connection_id": connection_id})
-
-    return main_orchestration(connection_id, system_prompt, tools, emitter)
+    # # ========= Fallback if we exit the loop with no reply =========
+    # fallback = "no more turns"
+    # emitter.emit(fallback)
+    # append_message_entry(
+    #     connection_id,
+    #     {"role": "assistant", "content": [{"text": fallback}]},
+    # )

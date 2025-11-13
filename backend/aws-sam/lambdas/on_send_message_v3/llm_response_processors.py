@@ -4,14 +4,75 @@ import re
 from typing import Any, Dict, List, Optional
 
 
+def _strip_full_repeats(text: str) -> str:
+    """
+    Detects cases like 'X X', 'X X X', etc. (exact repetition of the
+    same block 2–5 times) and returns just 'X'.
+    """
+    candidate = text.strip()
+    if not candidate:
+        return text
 
-def join_clean(chunks: List[str]) -> str:
-    parts = []
-    for t in chunks or []:
-        t = clean(t)
-        if t:
-            parts.append(t)
-    return "\n\n".join(parts).strip() or "(no output)"
+    # Try N copies where N is small (we only care about obvious glitches)
+    for n in range(2, 6):
+        if len(candidate) % n != 0:
+            continue
+        unit_len = len(candidate) // n
+        unit = candidate[:unit_len]
+        if unit * n == candidate:
+            return unit.strip()
+
+    return text
+
+
+def join_clean(chunks: Optional[List[str]]) -> str:
+    """
+    Join a list of raw model text chunks into a single clean string.
+
+    - Handles None / empty input
+    - Runs `clean()` on each chunk
+    - Normalizes spaces / newlines
+    - Drops empty chunks
+    - Drops consecutive duplicate chunks
+    - Collapses obvious 'same message repeated N times' patterns
+    """
+    if not chunks:
+        return "(no output)"
+
+    parts: List[str] = []
+
+    for raw in chunks:
+        if not raw:
+            continue
+
+        # Your existing cleaner
+        t = clean(raw)
+        if not t:
+            continue
+
+        # Normalize whitespace a bit
+        t = re.sub(r"[ \t]+", " ", t)      # collapse runs of spaces/tabs
+        t = re.sub(r"\n{3,}", "\n\n", t)   # max 2 consecutive newlines
+        t = t.strip()
+
+        if not t:
+            continue
+
+        # Drop exact consecutive duplicates
+        if parts and t == parts[-1]:
+            continue
+
+        parts.append(t)
+
+    if not parts:
+        return "(no output)"
+
+    joined = "\n\n".join(parts).strip()
+
+    # Handle pathological “full message duplicated” cases
+    joined = _strip_full_repeats(joined)
+
+    return joined or "(no output)"
 
 def last_role(messages: List[Dict[str, Any]]) -> Optional[str]:
     return messages[-1]["role"] if messages else None

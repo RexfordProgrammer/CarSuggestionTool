@@ -3,7 +3,7 @@ import json
 import boto3
 
 from dynamo_db_helpers import save_user_message
-from bedrock_caller_v2 import call_bedrock  # tool-aware orchestrator
+from bedrock_caller_v2 import call_orchestrator  # tool-aware orchestrator
 
 
 def lambda_handler(event, context):
@@ -11,13 +11,6 @@ def lambda_handler(event, context):
     connection_id = event["requestContext"]["connectionId"]
     domain = event["requestContext"]["domainName"]
     stage = event["requestContext"]["stage"]
-
-    # Build API Gateway Management client (needed for streaming emits inside the orchestrator)
-    apigw = boto3.client(
-        "apigatewaymanagementapi",
-        endpoint_url=f"https://{domain}/{stage}",
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-    )
 
     # Parse inbound WebSocket frame
     try:
@@ -36,7 +29,14 @@ def lambda_handler(event, context):
         save_user_message("(connected)", connection_id)
 
     
-    _ = call_bedrock(connection_id, apigw)
+     # Build API Gateway Management client (needed for streaming emits inside the orchestrator)
+    apigw = boto3.client(
+        "apigatewaymanagementapi",
+        endpoint_url=f"https://{domain}/{stage}",
+        region_name=os.getenv("AWS_REGION", "us-east-1"),
+    )
+    
+    call_orchestrator(connection_id, apigw)
 
     # Always return 200; never drop the socket from handler exceptions
     return {"statusCode": 200}

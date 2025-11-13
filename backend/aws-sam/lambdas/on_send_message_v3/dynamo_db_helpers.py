@@ -130,32 +130,6 @@ def save_user_tool_result_message(connection_id: str, tool_result_blocks: list) 
         ExpressionAttributeValues={":empty": [], ":new": [entry]},
     )
 
-def summarize_thoughts(thoughts: Any, max_thoughts: int = 5, max_thought_length: int = 800) -> str:
-    try:
-        if isinstance(thoughts, dict):
-            if "thoughts" in thoughts and isinstance(thoughts["thoughts"], list):
-                thoughts_list = thoughts["thoughts"]
-            else:
-                thoughts_list = list(thoughts.values())
-        elif isinstance(thoughts, list):
-            thoughts_list = thoughts
-        else:
-            thoughts_list = [str(thoughts)]
-
-        recent = thoughts_list[-max_thoughts:]
-        formatted = []
-        for i, t in enumerate(recent, start=1):
-            if isinstance(t, (dict, list)):
-                t_str = json.dumps(t, ensure_ascii=False, default=str)
-            else:
-                t_str = str(t)
-            if len(t_str) > max_thought_length:
-                t_str = t_str[:max_thought_length] + " ... [truncated]"
-            formatted.append(f"[{i}] {t_str}")
-        return "\n".join(formatted) if formatted else "(no prior results)"
-    except Exception as e:
-        return f"(error summarizing thoughts: {e})"
-
 # ==========================
 # History rebuild (unchanged)
 # ==========================
@@ -175,14 +149,6 @@ def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
         else:
             msgs.append({"role": role, "content": [{"text": str(content)}]})
     return msgs
-
-def save_tool_response(name: str, result: Any, connection_id: str) -> None:
-    entry = {"tool": str(name), "result": result}
-    table.update_item(
-        Key={"connectionId": connection_id},
-        UpdateExpression="SET tool_responses = list_append(if_not_exists(tool_responses, :empty), :new)",
-        ExpressionAttributeValues={":empty": [], ":new": [entry]},
-    )
 
 def get_tool_responses(
     connection_id: str,

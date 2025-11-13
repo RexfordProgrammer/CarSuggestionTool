@@ -39,7 +39,7 @@ bedrock = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
-DEBUG = False
+DEBUG = True
 MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
 HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 
@@ -168,7 +168,7 @@ def call_orchestrator(connection_id: str, apigw) -> None:
             user_tool_result_entry = {"role": "user", "content": tool_result_blocks}
             
             if DEBUG:
-                 emitter.debug_emit("Tool Results Ready. Re-calling model.","data")
+                 emitter.debug_emit("Tool Results Ready. Re-calling model.",user_tool_result_entry)
 
             # Save the tool results to the database and update history
             # The save_user_tool_result_entry is critical to maintain the correct history state

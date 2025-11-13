@@ -1,14 +1,9 @@
 import os
 import json
 import requests
-import boto3
 
-# Note: save_bot_response is no longer needed in this file
-# from db_tools import save_bot_response 
 
-# Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000
-DEBUG = True
 
 def _safe_json(obj) -> str:
     """Safely serialize an object to a JSON string."""
@@ -19,7 +14,8 @@ def _safe_json(obj) -> str:
 
 
 class Emitter:
-    def __init__(self, apigw=None, connection_id=None, domain=None, stage=None):
+    def __init__(self, apigw=None, connection_id=None, debug=True):
+        self.debug =debug
         self.connection_id = connection_id
         self.is_local = os.getenv("AWS_SAM_LOCAL", "").lower() == "true"
         self.local_ws_url = (
@@ -31,14 +27,7 @@ class Emitter:
             print(f"🧠 Local emit mode enabled → {self.local_ws_url}")
             self.apigw = None
         else:
-            self.domain = domain or os.getenv("WS_DOMAIN")
-            self.stage = stage or os.getenv("WS_STAGE")
-            endpoint = os.getenv("WS_API_URL") or (f"https://{self.domain}/{self.stage}")
-            self.apigw = apigw or boto3.client(
-                "apigatewaymanagementapi",
-                endpoint_url=endpoint,
-            )
-            print(f"🌐 Remote emit endpoint → {endpoint}")
+            self.apigw = apigw
 
     # --- helper to normalize text ---
     def _to_text(self, data) -> str:
@@ -164,7 +153,7 @@ class Emitter:
     # DEBUG EMIT (identical WS shape, no DB save)
     # ==========================================================
     def debug_emit(self, label: str, data) -> None:
-        if (not DEBUG):
+        if (not self.debug):
             return
         """Emit debug info to the chat the same way as normal output, but skip DynamoDB."""
         try:

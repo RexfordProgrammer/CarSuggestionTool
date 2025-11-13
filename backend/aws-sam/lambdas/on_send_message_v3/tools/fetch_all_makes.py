@@ -48,7 +48,7 @@ def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
         {
             "json": {
                 "count": len(makes),
-                "makes": makes[:200],  # Limit for readability
+                "makes": makes[:40],  # Limit for readability
             }
         }
     ]

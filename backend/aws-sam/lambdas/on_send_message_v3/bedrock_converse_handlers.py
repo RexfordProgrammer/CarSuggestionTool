@@ -46,7 +46,7 @@ def split_mixed_assistant(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
 # ==========================
 # EXTRACTION UTILITIES
 # ==========================
-def extract_text_chunks(content: List[Dict[str, Any]]) -> List[str]:
+def extract_text_blocks(content: List[Dict[str, Any]]) -> List[str]:
     out = []
     for c in content or []:
         if isinstance(c, dict) and "text" in c:
@@ -77,7 +77,7 @@ def get_first_tool_use(resp: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def get_all_text_from_resp(resp: Dict[str, Any], sep=" ") -> str:
     blocks = get_content_blocks(resp)
-    texts = extract_text_chunks(blocks)
+    texts = extract_text_blocks(blocks)
     return sep.join(texts).strip()
 
 

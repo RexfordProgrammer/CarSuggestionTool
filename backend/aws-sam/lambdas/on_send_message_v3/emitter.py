@@ -1,5 +1,5 @@
 import os, json, requests, boto3
-from dynamo_db_helpers import save_bot_response
+from db_tools import save_bot_response
 
 # Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000

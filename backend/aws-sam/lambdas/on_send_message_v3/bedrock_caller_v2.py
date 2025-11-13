@@ -1,23 +1,33 @@
 import os
-import json
 from typing import List, Dict, Any
-from decimal import Decimal
 import boto3
 import botocore
+from system_prompt_builder import build_system_prompt
 
-from dynamo_db_helpers import get_session_messages
-from db_tools import (
-    save_assistant_from_bedrock_resp,
-    save_user_bedrock_style,
-    append_message_entry,
-)
+# Assuming 'tools' contains dispatch and tool_specs
 from tools import dispatch, tool_specs
-from llm_response_processors import (
+
+# Importing utilities from the provided handlers (bedrock_converse_handlers/db_tools)
+from bedrock_converse_handlers import (
     extract_text_chunks,
     extract_tool_uses,
-    join_clean,
-    needs_continue_nudge,
 )
+
+# Importing utilities from the second code block
+from bedrock_converse_handlers import (
+    preview_tool_result,
+    to_native_json,
+)
+
+# Importing utilities from db_tools.py
+from db_tools import (
+    save_assistant_from_bedrock_resp,
+    build_history_messages,
+    append_message_entry, # For error handling
+    save_user_continue,
+    save_user_tool_result_entry
+)
+
 from emitter import Emitter
 
 # ==========================
@@ -34,112 +44,6 @@ MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
 HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 
 
-def _preview_tool_result(result, max_lines: int = 40, max_line_chars: int = 200) -> str:
-    try:
-        if isinstance(result, (dict, list)):
-            s = json.dumps(result, ensure_ascii=False, indent=2, default=str)
-        else:
-            s = str(result)
-    except Exception:
-        s = str(result)
-
-    lines = s.splitlines()
-    clipped = []
-    for line in lines[:max_lines]:
-        if len(line) > max_line_chars:
-            clipped.append(line[:max_line_chars] + "…")
-        else:
-            clipped.append(line)
-    if len(lines) > max_lines:
-        clipped.append(f"... [truncated to {max_lines} lines]")
-    return "\n".join(clipped)
-
-
-def _to_native_json(obj):
-    """Recursively convert DynamoDB Decimals to int/float and normalize JSON-unsafe types."""
-    if isinstance(obj, Decimal):
-        return int(obj) if obj == obj.to_integral_value() else float(obj)
-    if isinstance(obj, dict):
-        return {k: _to_native_json(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_to_native_json(v) for v in obj]
-    if isinstance(obj, set):
-        return [_to_native_json(v) for v in obj]
-    if isinstance(obj, (bytes, bytearray)):
-        return obj.decode("utf-8", errors="replace")
-    return obj
-
-
-def _normalize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Guarantee every message has Bedrock-compliant content blocks and native JSON scalars."""
-    cleaned = []
-    for m in messages:
-        role = m.get("role")
-        content = m.get("content")
-
-        if isinstance(content, str):
-            blocks = [{"text": content}]
-        elif isinstance(content, list):
-            blocks = content
-        else:
-            blocks = [{"text": str(content)}]
-
-        blocks = _to_native_json(blocks)
-        cleaned.append({"role": role, "content": blocks})
-    return cleaned
-
-
-def _build_system_prompt(specs: List[Dict[str, Any]]) -> str:
-    """Construct system prompt with tool listings and optional appended rules."""
-    lines = []
-    for s in specs:
-        ts = s.get("toolSpec", s)
-        lines.append(f"- {ts.get('name')}: {ts.get('description')}")
-    allowed_block = "\n".join(lines) or "- (no tools available)"
-
-    appendix_text = ""
-    appendix_path = os.path.join(os.path.dirname(__file__), "prompt_append.txt")
-    if os.path.exists(appendix_path):
-        with open(appendix_path, "r", encoding="utf-8") as f:
-            appendix_text = f.read().strip()
-
-    base_prompt = (
-        "Available tools:\n"
-        f"{allowed_block}\n\n"
-        "When responding:\n"
-        "- Only emit valid `toolUse` blocks when invoking tools.\n"
-        "- Never describe tool calls in plain text.\n"
-        "- Do NOT include tool JSON in user-visible replies.\n"
-        "- Be conversational and concise.\n"
-    )
-    if appendix_text:
-        base_prompt += "\n\nADDITIONAL RULES:\n" + appendix_text + "\n"
-    return base_prompt
-
-
-def get_chat_history(connection_id: str) -> List[Dict[str, Any]]:
-    """
-    Build windowed, normalized transcript for the model.
-
-    NOTE: This reads from Dynamo (via get_session_messages). All *writes*
-    to the transcript go through db_tools now.
-    """
-    raw_history = get_session_messages(connection_id) or []
-    # windowed = _history_window(raw_history)
-    safe_history = _normalize_messages(raw_history)
-
-    if needs_continue_nudge(safe_history):
-        # Persist a "(continue)" user nudge via db_tools (no tools involved here)
-        save_user_bedrock_style(
-            connection_id,
-            [{"text": "(continue)"}],
-        )
-        raw_history = get_session_messages(connection_id) or []
-        # windowed = _history_window(raw_history)
-        safe_history = _normalize_messages(raw_history)
-
-    return safe_history
-
 # ==========================
 # ENTRY POINT
 # ==========================
@@ -149,21 +53,26 @@ def call_orchestrator(connection_id: str, apigw) -> None:
     tools = tool_info["tool_config"]["tools"]
     specs = tool_info["specs"]
 
-    system_prompt = _build_system_prompt(specs)
+    system_prompt = build_system_prompt(specs)
     emitter = Emitter(apigw, connection_id)
 
     if DEBUG:
-        emitter.debug_emit("Starting call_bedrock", {"connection_id": connection_id})
+        emitter.debug_emit("Starting call_orchestrator", {"connection_id": connection_id})
 
-    history: List[Dict[str, Any]] = get_chat_history(connection_id)
-    
+    # Use the new helper to get history
+    history: List[Dict[str, Any]] = build_history_messages(connection_id)
+
     ### this begins upon message sent from frontend
     for turn in range(MAX_TURNS):
+        tool_result_blocks: List[Dict[str, Any]] = []
+
         if DEBUG:
             emitter.debug_emit("Turn: ", turn)
-        ## these blocks are passed to the bedrock converse as a package
+            # Log the size of the history being sent to the model for debugging context issues
+            emitter.debug_emit("History Size: ", len(history))
+
+        # Prepare payload for the converse call
         system_blocks = [{"text": system_prompt}]
-        ## builds payload for the model
         payload = {
             "modelId": ORCHESTRATOR_MODEL,
             "system": system_blocks,
@@ -171,93 +80,101 @@ def call_orchestrator(connection_id: str, apigw) -> None:
             "toolConfig": {"tools": tools},
             "inferenceConfig": {"temperature": 0.5},
         }
-        payload = _to_native_json(payload)
+        # Use the new JSON safe helper
+        payload = to_native_json(payload)
 
         try:
             resp = bedrock.converse(**payload)
         except Exception as e:
             err = f"Model call failed: {e}"
             emitter.emit(err)
+            # Use append_message_entry for error
             append_message_entry(
                 connection_id,
                 {"role": "assistant", "content": [{"text": err}]},
             )
             break
 
-        # Persist assistant (including any toolUse blocks)
+        # --- PROCESS MODEL RESPONSE ---
+
+        # Use the new helper to save the assistant's response and get the last entry
+        # This function handles splitting text/tool-use blocks and saving them to the database
         assistant_entry = save_assistant_from_bedrock_resp(connection_id, resp)
         content = assistant_entry.get("content") or []
-        history.append(assistant_entry)
+        # Update in-memory history with the *last* saved entry (which should be the tool-use block if one exists)
+        history.append(assistant_entry) 
 
         tool_uses = extract_tool_uses(content)
         assistant_texts = extract_text_chunks(content)
 
-        if DEBUG:
-            emitter.debug_emit("Tool Uses:", tool_uses)
-            emitter.debug_emit("Assistant Texts Uses:", assistant_texts)
-        
-        # ===== Normal conversational reply (no toolUse) OR final turn =====
-        if not tool_uses or turn == MAX_TURNS - 1:
+        # --- END OF TURN CHECK ---
+        if not tool_uses:
+            # If no tools, it's either the final answer or a nudge
+            reply = "".join(assistant_texts).strip() 
             
-            reply = join_clean(assistant_texts)
-            if reply:
-                # assistant already persisted
-                emitter.emit(reply)
+            if reply or turn == MAX_TURNS - 1:
+                # If we have a reply, or we've hit max turns, emit and break
+                if reply:
+                    emitter.emit(reply)
                 break
             else:
-                # If nothing to say, gently prompt the model on next loop (no tools)
-                continue_blocks = [{"text": "(continue)"}]
-                history.append({"role": "user", "content": continue_blocks})
-                save_user_bedrock_style(connection_id, continue_blocks)
-        else:
-            # ===== TOOL PROCESSING =====
-            tool_result_blocks: List[Dict[str, Any]] = []
+                # Nudge for continuation if no text and no tools were returned, and we're not at max turns
+                save_user_continue(connection_id)
+                # The save_user_continue must be appended to history for the next model call
+                history.append({"role": "user", "content": [{"text": "(continue)"}]})
+                continue
+        
+        # --- TOOL EXECUTION AND RESULT PREP ---
+        if DEBUG:
+             emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
 
-            for tu in tool_uses:
-                name = tu.get("name")
-                inp = tu.get("input") or {}
-                tool_use_id = tu.get("toolUseId")
-                if DEBUG:
-                    emitter.debug_emit("[TOOL CALL]", {"name": name, "input": inp})
-                try:
-                    result = dispatch(name, connection_id, inp)
-                    if DEBUG:
-                        emitter.debug_emit(f"{name} result: ", result)
-                    preview_text = _preview_tool_result(result, max_lines=40, max_line_chars=200)
-                except Exception as e:
-                    err_payload = {"error": str(e)}
-                    if DEBUG:
-                        emitter.debug_emit("Tool error", err_payload)
-                    preview_text = _preview_tool_result(err_payload, max_lines=40, max_line_chars=200)
+        # TOOL PROCESSING: This section executes the tool calls
+        for tu in tool_uses:
+            name = tu.get("name")
+            tool_input = tu.get("input") or {}
+            tool_use_id = tu.get("toolUseId")
+            
+            # Use emitter to show the tool call is happening
+            emitter.emit(f"Calling tool:{name} input {tool_input}")
 
-                content_blocks = [{"text": preview_text}]
+            try:
+                # Dispatch tool call
+                result = dispatch(name, connection_id, tool_input)
+                # Use the new preview helper
+                preview_text = preview_tool_result(result)
+            except Exception as e:
+                err_payload = {"error": str(e)}
+                preview_text = preview_tool_result(err_payload)
+                emitter.emit(f"Tool {name} failed: {str(e)}")
 
-                tool_result_blocks.append(
-                    {
-                        "toolResult": {
-                            "toolUseId": tool_use_id,
-                            "content": content_blocks,
-                        }
-                    }
-                )
-        ### POST TOOL PROCESSING
-        # Hard guard: never send more toolResult blocks than toolUse blocks
-        if len(tool_result_blocks) > len(tool_uses):
-            tool_result_blocks = tool_result_blocks[: len(tool_uses)]
 
-        # Append ONE user message with all toolResult blocks for this turn,
-        # and DO NOT append a '(continue)' user message after it.
+            # Build the toolResult block
+            tool_result_blocks.append({
+                "toolResult": {
+                    "toolUseId": tool_use_id,
+                    "content": [{"text": preview_text}],
+                }
+            })
+
+        # --- POST TOOL PROCESSING: Prepare for re-call ---
+        
+        # The original check for len(tool_result_blocks) > len(tool_uses) is redundant
+        # here because tool_result_blocks is built 1:1 with tool_uses, but for safety:
+        # if len(tool_result_blocks) > len(tool_uses):
+        #     tool_result_blocks = tool_result_blocks[: len(tool_uses)]
+
         if tool_result_blocks:
+            # Build the user message with tool results
             user_tool_result_entry = {"role": "user", "content": tool_result_blocks}
+            
+            if DEBUG:
+                 emitter.debug_emit("Tool Results Ready. Re-calling model.","data")
+
+            # Save the tool results to the database and update history
+            # The save_user_tool_result_entry is critical to maintain the correct history state
+            save_user_tool_result_entry(connection_id, tool_result_blocks)
             history.append(user_tool_result_entry)
-            save_user_bedrock_style(connection_id, tool_result_blocks)
-
-        # Next iteration will call converse() again with updated history
-
-    # # ========= Fallback if we exit the loop with no reply =========
-    # fallback = "no more turns"
-    # emitter.emit(fallback)
-    # append_message_entry(
-    #     connection_id,
-    #     {"role": "assistant", "content": [{"text": fallback}]},
-    # )
+            
+            # The loop continues here, immediately re-calling the model 
+            # with the tool results included in the history for the next turn.
+            continue

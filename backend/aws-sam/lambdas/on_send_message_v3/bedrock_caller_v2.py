@@ -39,7 +39,7 @@ bedrock = boto3.client(
     region_name=os.getenv("AWS_REGION", "us-east-1"),
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
-DEBUG = True
+DEBUG = False
 MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
 HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
 

@@ -1,11 +1,17 @@
-import os, json, requests, boto3
-from db_tools import save_bot_response
+import os
+import json
+import requests
+import boto3
+
+# Note: save_bot_response is no longer needed in this file
+# from db_tools import save_bot_response 
 
 # Conservative size to stay well under API Gateway WS 32KB limit
 _MAX_FRAME_BYTES = 28_000
 DEBUG = True
 
 def _safe_json(obj) -> str:
+    """Safely serialize an object to a JSON string."""
     try:
         return json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
@@ -43,10 +49,12 @@ class Emitter:
             return data
 
         if isinstance(data, dict):
+            # Check for common text keys
             for key in ("reply", "text", "message", "output"):
                 val = data.get(key)
                 if isinstance(val, str):
                     return val
+            # Check for Bedrock-style content blocks
             if isinstance(data.get("content"), list):
                 parts = []
                 for c in data["content"]:
@@ -55,6 +63,7 @@ class Emitter:
                     elif isinstance(c, dict):
                         parts.append(c.get("text") or c.get("body") or _safe_json(c))
                 return " ".join(p for p in parts if p)
+            # Fallback for other dicts
             return _safe_json(data)
 
         if isinstance(data, (list, tuple)):
@@ -64,6 +73,7 @@ class Emitter:
 
     # --- local send ---
     def _send_local(self, payload: dict) -> bool:
+        """Sends payload to a local WebSocket server (e.g., SAM local)."""
         url = f"{self.local_ws_url}/@connections/{self.connection_id}"
         try:
             res = requests.post(url, json=payload, timeout=5)
@@ -77,6 +87,7 @@ class Emitter:
 
     # --- remote send ---
     def _send_remote(self, payload: dict) -> bool:
+        """Sends payload to the deployed API Gateway WebSocket."""
         data_bytes = _safe_json(payload).encode("utf-8")
         try:
             self.apigw.post_to_connection(
@@ -102,10 +113,10 @@ class Emitter:
         return self._send_remote(payload)
 
     # ==========================================================
-    # NORMAL EMIT (user-facing + persisted)
+    # NORMAL EMIT (user-facing, NO persistence)
     # ==========================================================
     def emit(self, text) -> bool:
-        """Emit to WebSocket (local or remote), and persist response."""
+        """Emit to WebSocket (local or remote). ASSUMES message has already been persisted."""
         try:
             text_str = self._to_text(text).strip()
         except Exception as e:
@@ -113,19 +124,21 @@ class Emitter:
             return False
 
         if not text_str:
+            # Don't send empty messages
             return False
 
         print(f"\n🪵 [EMIT RAW TEXT - {len(text_str)} chars]\n{text_str}\n")
-
-        # Persist for chat history
-        try:
-            save_bot_response(text_str, self.connection_id)
-        except Exception as e:
-            print(f"⚠️ save_bot_response failed (continuing): {e}")
+        
+        #
+        # 🛑 PERSISTENCE LOGIC REMOVED 🛑
+        # The orchestrator (call_orchestrator) is now solely responsible 
+        # for saving messages to the database via its helpers.
+        #
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []
         if len(reply_bytes) > _MAX_FRAME_BYTES:
+            # Handle large messages by splitting them
             start = 0
             idx = 1
             total = (len(reply_bytes) + _MAX_FRAME_BYTES - 1) // _MAX_FRAME_BYTES

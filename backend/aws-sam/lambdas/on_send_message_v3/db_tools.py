@@ -117,7 +117,7 @@ def save_user_tool_result_entry(connection_id: str, tool_result_blocks: List[Dic
     append_message_entry(connection_id, entry)
 
 # ==========================
-# Tool Block Filtering (NEW)
+# Tool Block Filtering (Unchanged)
 # ==========================
 def _strip_tool_blocks_from_message(message: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -154,8 +154,7 @@ def get_session_messages(connection_id: str) -> List[Dict[str, Any]]:
 def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
     """
     Builds the conversation history for the Bedrock API call.
-    Critically, it strips out all tool-related blocks to reduce context size 
-    and prevent validation errors.
+    It strips out all tool-related blocks and returns only the last 5 messages.
     """
     raw = get_session_messages(connection_id) or []
     out = []
@@ -177,4 +176,5 @@ def build_history_messages(connection_id: str) -> List[Dict[str, Any]]:
         # 3. Append the text-only message to the history
         out.append({"role": role, "content": content})
 
-    return out
+    # 4. Return only the last 5 cleaned messages
+    return out[-5:]

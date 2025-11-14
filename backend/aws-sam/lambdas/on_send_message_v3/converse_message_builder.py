@@ -128,8 +128,8 @@ def to_native_json(obj):
 
 ### Create Content Blocks
 from decimal import Decimal
-from typing import Dict, List
-from tools import dispatch, tool_specs
+from typing import Any, Dict, List
+from tools import tool_specs
 from system_prompt_builder import build_system_prompt
 
 
@@ -328,3 +328,21 @@ def build_payload(history):
 def extract_message_from_response(resp):
     message_body = resp.get("output", {}).get("message", {})
     return message_body
+
+# ==========================
+# EXTRACTION UTILITIES
+# ==========================
+def extract_text_blocks(content: List[Dict[str, Any]]) -> List[str]:
+    out = []
+    for c in content or []:
+        if isinstance(c, dict) and "text" in c:
+            out.append(str(c["text"]))
+    return out
+
+
+def extract_tool_uses(content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    uses = []
+    for c in content or []:
+        if isinstance(c, dict) and isinstance(c.get("toolUse"), dict):
+            uses.append(c["toolUse"])
+    return uses

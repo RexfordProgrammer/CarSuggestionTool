@@ -1,17 +1,20 @@
 '''Caller of Bedrock converse loop'''
 import os
-from typing import List, Dict, Any
+from typing import Dict, List
 import boto3
 import botocore
 
-from converse_message_builder import (build_payload, create_tool_result_content_block,
-                                      create_user_text_message,create_message)
-from db_tools_v2 import (save_user_tool_result_entry_v2, save_assistant_from_bedrock_resp_v2,
-                         build_history_messages,save_user_continue)
-from bedrock_converse_handlers import extract_text_blocks, extract_tool_uses
+from db_tools_v2 import (build_history_messages, save_assistant_message,
+                         save_user_continue, save_user_tool_results)
 
-from tools import dispatch
+from pydantic_models import (ConversePayload, FullToolSpec, JsonContent, Message, 
+                            TextContentBlock, ToolConfig,
+                            ToolResult, ToolResultContentBlock, ToolSpecsOutput, ToolUse, )
+
+from converse_pydantic import ConverseResponse
+from tools import dispatch,tool_specs, tool_specs_output
 from emitter import Emitter
+from system_prompt_builder import build_system_prompt
 
 bedrock = boto3.client(
     "bedrock-runtime",
@@ -29,74 +32,69 @@ def call_orchestrator(connection_id: str, apigw) -> None:
 
     emitter.debug_emit("Starting call_orchestrator", {"connection_id": connection_id})
 
-    history: List[Dict[str, Any]] = build_history_messages(connection_id)
+    history: List[Message] = build_history_messages(connection_id)
 
     ### this begins upon message sent from frontend
     for turn in range(MAX_TURNS):
-        tool_result_blocks: List[Dict[str, Any]] = []
+        tool_result_blocks: ToolResultContentBlock = []
 
-        emitter.debug_emit("Turn: ", turn)
-        emitter.debug_emit("History Size: ", len(history))
         emitter.debug_emit("History: ", history)
 
-        payload = build_payload(history)
-
+        tool_specs_list:  List[FullToolSpec] = tool_specs()
+        system_prompt = build_system_prompt(tool_specs_list)
+        tool_info_blocks: ToolSpecsOutput = tool_specs_output()
+        tool_config: ToolConfig = tool_info_blocks.tool_config
+        # payload = build_payload(history)
+        payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",
+                                  system=[system_prompt],
+                                  messages=history,
+                                  interferenceConfig={"temperature": 0.5},
+                                  toolConfig=tool_config)
+            
         try:
-            resp = bedrock.converse(**payload)
+            resp = bedrock.converse(**payload.to_api_dict())
+            response = ConverseResponse.model_validate(resp)
         except Exception as e:
             err = f"Model call failed: {e}"
             emitter.emit(err)
             break
-
-        assistant_entry = save_assistant_from_bedrock_resp_v2(connection_id, resp) # persists and returns message
         
-        content = assistant_entry.get("content") or []
-        history.append(assistant_entry) 
-
-        tool_uses = extract_tool_uses(content)
-        assistant_texts = extract_text_blocks(content)
+        save_assistant_message(connection_id, response) # persists and returns message
+        assistant_text = response.get_text()
+        history.append(response.output.message)
+        tool_uses: List[ToolUse] = response.get_tool_uses()
 
         if not tool_uses: # If no tools, it's either the final answer or a nudge
-            reply = "".join(assistant_texts).strip() 
+            reply = "".join(assistant_text).strip() 
             if reply or turn == MAX_TURNS - 1: # If we have a reply, or we've hit max turns, emit and break
                 if reply:
                     emitter.emit(reply)
                 break
-            else:
-                continue_message = create_user_text_message("continue")
-                save_user_continue(connection_id)
-                history.append(continue_message)
-                continue
         
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
 
         # TOOL PROCESSING: This section executes the tool calls
         for tu in tool_uses:
-            name = tu.get("name")
-            tool_input = tu.get("input") or {}
-            tool_use_id = tu.get("toolUseId")
-            
-            # Use emitter to show the tool call is happening
-            emitter.emit(f"Calling tool:{name} input {tool_input}")
-
+            emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
             try:
-                # Dispatch tool call
-                result = dispatch(name, connection_id, tool_input)
-                # Use the new preview helper
-                # preview_text = preview_tool_result(result)
+                result: List[Dict] = dispatch(tu.name, connection_id, tu.input) # Dispatches tool from tool call
+                # json_result = JsonContent.model_validate(result) # Converts Json response to JsonContent
+                validated_content: List[JsonContent] = [# Converts Json response to JsonContent
+                    JsonContent.model_validate(item) 
+                    for item in result
+                ]
             except Exception as e:
                 err_payload = {"error": str(e)}
-                # preview_text = preview_tool_result(err_payload)
-                emitter.emit(f"Tool {name} failed: {str(e)}")
+                emitter.emit(f"Tool {tu.name} failed: {str(err_payload)}")
             
             ##### create tool block and append it to local toolused blocks
-            tool_block = create_tool_result_content_block(tool_use_id, result)            
-            tool_result_blocks.append(tool_block)
+            tr = ToolResult(toolUseId=tu.toolUseId,content=validated_content)
+            tr_contblock: ToolResultContentBlock = ToolResultContentBlock(toolResult=tr)
+
+            tool_result_blocks.append(tr_contblock)
 
         if tool_result_blocks:
-            
-            user_tool_result_entry = create_message("user",tool_result_blocks)
-            save_user_tool_result_entry_v2(connection_id, tool_result_blocks)
+            user_tool_result_entry = Message(role="user", content=tool_result_blocks)
+            save_user_tool_results(connection_id, tool_result_blocks)
             history.append(user_tool_result_entry)
             emitter.debug_emit("Tool Results Ready. Re-calling model.",user_tool_result_entry)
-            continue

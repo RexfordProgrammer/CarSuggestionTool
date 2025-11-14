@@ -1,58 +1,60 @@
-import os
 import json
-import requests
+import os
+from typing import Any, Dict, Literal
+import boto3
+import botocore
+from pydantic import BaseModel, Field
 
+# --- Pydantic Model for Outgoing WebSocket Payload ---
+class WebSocketPayload(BaseModel):
+    """Model for the data sent over the WebSocket."""
+    # Fix applied: Use Literal for constant value, which makes it a required field.
+    type: Literal["bedrock_reply"] 
+    reply: str
 
-_MAX_FRAME_BYTES = 28_000
+# --- Constants ---
+# Max message size for API Gateway WebSocket (32KB), using a safety margin
+_MAX_FRAME_BYTES = 28_000 
 
-def _safe_json(obj) -> str:
+def _safe_json(obj: Any) -> str:
     """Safely serialize an object to a JSON string."""
     try:
+        if isinstance(obj, BaseModel):
+            return obj.model_dump_json(exclude_none=True)
         return json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
         return str(obj)
 
 
 class Emitter:
-    def __init__(self, apigw=None, connection_id=None, debug=True):
-        self.debug =debug
+    """Handles sending messages to the connected client via API Gateway WebSocket."""
+
+    def __init__(self, apigw: boto3.client, connection_id: str, debug: bool = True):
+        self.debug = debug
         self.connection_id = connection_id
-        self.is_local = os.getenv("AWS_SAM_LOCAL", "").lower() == "true"
-        self.local_ws_url = (
-            os.getenv("LOCAL_WS_URL")
-            or ("http://host.docker.internal:8080" if self.is_local else None)
-        )
-
-        if self.local_ws_url:
-            print(f"🧠 Local emit mode enabled → {self.local_ws_url}")
-            self.apigw = None
-        else:
-            self.apigw = apigw
-
+        
+        if apigw is None:
+             raise ValueError("API Gateway client (apigw) must be provided in a non-local environment.")
+        self.apigw = apigw
+        
     # --- helper to normalize text ---
-    def _to_text(self, data) -> str:
-        """Extract a readable string from any shape (dict, list, etc.)."""
-        if data is None:
-            return ""
-        if isinstance(data, str):
-            return data
+    def _to_text(self, data: Any) -> str:
+        """Extract a readable string from any shape (Pydantic model, dict, list, etc.)."""
+        if data is None: return ""
+        if isinstance(data, str): return data
+        
+        if isinstance(data, BaseModel): data = data.model_dump()
 
         if isinstance(data, dict):
-            # Check for common text keys
             for key in ("reply", "text", "message", "output"):
                 val = data.get(key)
-                if isinstance(val, str):
-                    return val
-            # Check for Bedrock-style content blocks
+                if isinstance(val, str): return val
             if isinstance(data.get("content"), list):
                 parts = []
                 for c in data["content"]:
-                    if isinstance(c, str):
-                        parts.append(c)
-                    elif isinstance(c, dict):
-                        parts.append(c.get("text") or c.get("body") or _safe_json(c))
+                    if isinstance(c, str): parts.append(c)
+                    elif isinstance(c, dict): parts.append(c.get("text") or _safe_json(c))
                 return " ".join(p for p in parts if p)
-            # Fallback for other dicts
             return _safe_json(data)
 
         if isinstance(data, (list, tuple)):
@@ -60,109 +62,88 @@ class Emitter:
 
         return str(data)
 
-    # --- local send ---
-    def _send_local(self, payload: dict) -> bool:
-        """Sends payload to a local WebSocket server (e.g., SAM local)."""
-        url = f"{self.local_ws_url}/@connections/{self.connection_id}"
-        try:
-            res = requests.post(url, json=payload, timeout=5)
-            print(f"[LOCAL EMIT] {res.status_code} → {url}")
-            if res.status_code >= 400:
-                print(f"Local emit error body: {res.text[:500]}")
-            return res.ok
-        except Exception as e:
-            print(f"Local emit failed: {e}")
-            return False
-
-    # --- remote send ---
-    def _send_remote(self, payload: dict) -> bool:
+    def _send_remote(self, payload: WebSocketPayload) -> bool:
         """Sends payload to the deployed API Gateway WebSocket."""
-        data_bytes = _safe_json(payload).encode("utf-8")
+        data_bytes = payload.model_dump_json(exclude_none=True).encode("utf-8")
+        
         try:
             self.apigw.post_to_connection(
                 ConnectionId=self.connection_id,
                 Data=data_bytes,
             )
-            # print(f"\n[REMOTE EMIT] bytes={len(data_bytes)} to {self.connection_id}")
             return True
         except Exception as e:
-            print(f"❌ Remote emit failed: {e}")
+            print(f"❌ Remote emit failed (Connection ID: {self.connection_id}): {e}")
             return False
 
-    # --- shared send ---
-    def _send_payload(self, payload: dict) -> bool:
-        """Send payload either locally or via API GW."""
-        try:
-            if (self.debug):
-                print("🪵 [FULL EMIT LOG] →", _safe_json(payload))
-        except Exception as e:
-            print(f"⚠️ Failed to log payload: {e}")
-
-        if self.local_ws_url:
-            return self._send_local(payload)
+    # --- shared send (internal) ---
+    def _send_payload(self, payload: WebSocketPayload) -> bool:
+        """Send payload via API GW, logging the action."""
         return self._send_remote(payload)
 
     # ==========================================================
     # NORMAL EMIT (user-facing, NO persistence)
     # ==========================================================
-    def emit(self, text) -> bool:
-        """Emit to WebSocket (local or remote). ASSUMES message has already been persisted."""
+    def emit(self, text: Any) -> bool:
+        """Emit user-facing text to the WebSocket."""
         try:
             text_str = self._to_text(text).strip()
         except Exception as e:
             print(f"❌ Failed to coerce text: {e}, payload type={type(text)}")
             return False
 
-        if not text_str:
-            # Don't send empty messages
-            return False
+        if not text_str: return False
 
         print(f"\n\n [EMIT RAW TEXT - chars]\n{text_str}\n\n")
-        
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []
+        
+        # Handle large messages by splitting into chunks
         if len(reply_bytes) > _MAX_FRAME_BYTES:
-            # Handle large messages by splitting them
             start = 0
             idx = 1
             total = (len(reply_bytes) + _MAX_FRAME_BYTES - 1) // _MAX_FRAME_BYTES
             while start < len(reply_bytes):
                 end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
                 chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
-                chunks.append({
-                    "type": "bedrock_reply",
-                    "reply": f"[{idx}/{total}] {chunk_text}",
-                })
+                
+                # FIX APPLIED HERE for chunked message:
+                chunks.append(
+                    WebSocketPayload(type="bedrock_reply", reply=f"[{idx}/{total}] {chunk_text}")
+                )
                 start = end
                 idx += 1
         else:
-            chunks.append({"type": "bedrock_reply", "reply": text_str})
+            # FIX APPLIED HERE for single message:
+            chunks.append(WebSocketPayload(type="bedrock_reply", reply=text_str))
 
         ok_all = True
         for payload in chunks:
             sent = self._send_payload(payload)
             ok_all = ok_all and sent
+            
         return ok_all
     
     # ==========================================================
     # DEBUG EMIT (identical WS shape, no DB save)
     # ==========================================================
-    def debug_emit(self, label: str, data) -> None:
-        if (not self.debug):
-            return
-        """Emit debug info to the chat the same way as normal output, but skip DynamoDB."""
+    def debug_emit(self, label: str, data: Any) -> None:
+        """Emit debug info to the chat."""
+        if not self.debug: return
+            
         try:
-            text = f"[DEBUG] {label}:\n" + json.dumps(data, indent=2, default=str)
+            serialized_data = json.dumps(data, indent=2, default=str)
+            text = f"[DEBUG] {label}:\n" + serialized_data
         except Exception:
             text = f"[DEBUG] {label}:\n" + str(data)
 
-        # console log
         print(f"\n🪵 {text}\n")
 
-        # ---- send to WS exactly like emit(), but NO save_bot_response ----
+        # ---- send to WS exactly like emit() ----
         reply_bytes = text.encode("utf-8")
         chunks = []
+        
         if len(reply_bytes) > _MAX_FRAME_BYTES:
             start = 0
             idx = 1
@@ -170,14 +151,16 @@ class Emitter:
             while start < len(reply_bytes):
                 end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
                 chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
-                chunks.append({
-                    "type": "bedrock_reply",
-                    "reply": f"[{idx}/{total}] {chunk_text}",
-                })
+                
+                # FIX APPLIED HERE for chunked debug message:
+                chunks.append(
+                    WebSocketPayload(type="bedrock_reply", reply=f"[{idx}/{total}] {chunk_text}")
+                )
                 start = end
                 idx += 1
         else:
-            chunks.append({"type": "bedrock_reply", "reply": text})
+            # FIX APPLIED HERE for single debug message:
+            chunks.append(WebSocketPayload(type="bedrock_reply", reply=text))
 
         for payload in chunks:
             self._send_payload(payload)

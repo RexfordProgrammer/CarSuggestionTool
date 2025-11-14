@@ -47,11 +47,20 @@ class JsonContent(BaseModel):
     """The JSON payload for a tool result."""
     json: Dict[str, Any]
 
+# 1. Define the possible content types for a ToolResult
+ToolResultContentType = Union[
+    JsonContent,
+    TextContentBlock,
+    Dict[str, Any]  # allow raw dicts from dispatch()
+]
+
 class ToolResult(BaseModel):
     """The result of a tool execution."""
     toolUseId: str
-    content: List[JsonContent] 
-
+    # FIX: Change from List[JsonContent] to accept the union of all content models
+    content: List[ToolResultContentType] 
+        # OR: content: List[Union[JsonContent, TextContentBlock]]
+    
 class ToolResultContentBlock(BaseModel):
     """A block wrapper for a tool result."""
     toolResult: ToolResult

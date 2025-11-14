@@ -1,15 +1,14 @@
 '''Caller of Bedrock converse loop'''
 import os
-from typing import Dict, List
+from typing import List
 import boto3
 import botocore
 
-from db_tools_v2 import (build_history_messages, save_assistant_message,
-                         save_user_continue, save_user_tool_results)
+from db_tools_v2 import (build_history_messages, save_assistant_message, save_user_tool_results)
 
-from pydantic_models import (ConversePayload, FullToolSpec, JsonContent, Message, 
+from pydantic_models import (ConversePayload, FullToolSpec, Message, 
                             TextContentBlock, ToolConfig,
-                            ToolResult, ToolResultContentBlock, ToolSpecsOutput, ToolUse, )
+                            ToolResult, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
 
 from converse_pydantic import ConverseResponse
 from tools import dispatch,tool_specs, tool_specs_output
@@ -73,26 +72,33 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
 
-        # TOOL PROCESSING: This section executes the tool calls
         for tu in tool_uses:
             emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
             try:
-                result: List[Dict] = dispatch(tu.name, connection_id, tu.input) # Dispatches tool from tool call
-                # json_result = JsonContent.model_validate(result) # Converts Json response to JsonContent
-                validated_content: List[JsonContent] = [# Converts Json response to JsonContent
-                    JsonContent.model_validate(item) 
-                    for item in result
-                ]
+                # MODIFIED: Dispatch now returns the final Pydantic content blocks.
+                # The type should be List[Union[JsonContent, TextContentBlock]]
+                validated_content = dispatch(tu.name, connection_id, tu.input)
+                
+                # Ensure it's a list of blocks before proceeding
+                if not isinstance(validated_content, list):
+                    raise TypeError("Tool handler did not return a list of Pydantic content blocks.")
+
             except Exception as e:
                 err_payload = {"error": str(e)}
                 emitter.emit(f"Tool {tu.name} failed: {str(err_payload)}")
-            
-            ##### create tool block and append it to local toolused blocks
-            tr = ToolResult(toolUseId=tu.toolUseId,content=validated_content)
+                # Create a TextContentBlock to send the error back to the model
+                error_content = [TextContentBlock(text=f"Tool execution failed: {str(e)}")]
+                
+                # Append a standardized error block to tool_result_blocks
+                tr = ToolResult(toolUseId=tu.toolUseId, content=error_content)
+                tr_contblock: ToolResultContentBlock = ToolResultContentBlock(toolResult=tr)
+                tool_result_blocks.append(tr_contblock)
+                # Skip to next tool use or re-call model
+                continue
+            tr = ToolResult(toolUseId=tu.toolUseId, content=validated_content)
             tr_contblock: ToolResultContentBlock = ToolResultContentBlock(toolResult=tr)
 
             tool_result_blocks.append(tr_contblock)
-
         if tool_result_blocks:
             user_tool_result_entry = Message(role="user", content=tool_result_blocks)
             save_user_tool_results(connection_id, tool_result_blocks)

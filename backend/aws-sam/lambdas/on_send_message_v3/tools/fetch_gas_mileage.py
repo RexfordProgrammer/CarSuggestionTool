@@ -1,7 +1,22 @@
 # tools/fetch_fuel_economy.py
 import requests
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
+import xml.etree.ElementTree as ET # Added for XML parsing
+from pydantic import BaseModel, Field # Assuming pydantic is available
 
+# --- NECESSARY PYDANTIC IMPORTS (for local context) ---
+class TextContentBlock(BaseModel):
+    """A simple text block."""
+    text: str
+
+class JsonContent(BaseModel):
+    """The JSON payload for a tool result."""
+    json: Dict[str, Any]
+
+# Define the acceptable return type for the handle function
+HandleReturnType = List[Union[JsonContent, TextContentBlock]]
+
+# --- TOOL SPECIFICATION REMAINS THE SAME ---
 SPEC = {
     "toolSpec": {
         "name": "fetch_gas_mileage",
@@ -33,6 +48,8 @@ SPEC = {
 }
 
 
+# --- HELPER FUNCTIONS (UNCHANGED) ---
+
 def _get_vehicle_id(year: int, make: str, model: str) -> str:
     """
     Step 1: Find the vehicle ID for the given year/make/model.
@@ -44,7 +61,7 @@ def _get_vehicle_id(year: int, make: str, model: str) -> str:
         resp.raise_for_status()
         # The API often returns XML, but newer responses can be JSON if header included.
         if "application/json" not in resp.headers.get("Content-Type", ""):
-            import xml.etree.ElementTree as ET
+            # import xml.etree.ElementTree as ET # Already imported above
             root = ET.fromstring(resp.text)
             menu_items = root.findall(".//menuItem")
             if not menu_items:
@@ -71,7 +88,7 @@ def _fetch_vehicle_details(vehicle_id: str) -> Dict[str, Any]:
 
         if "application/json" not in resp.headers.get("Content-Type", ""):
             # Parse XML to extract common fields
-            import xml.etree.ElementTree as ET
+            # import xml.etree.ElementTree as ET # Already imported above
             root = ET.fromstring(resp.text)
             get = lambda tag: root.findtext(tag)
             return {
@@ -105,20 +122,36 @@ def _fetch_vehicle_details(vehicle_id: str) -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
+# --- MODIFIED HANDLER FUNCTION ---
+
+def handle(connection_id: str, tool_input: Dict) -> HandleReturnType:
     """
     Main Bedrock-tool handler.
+    Returns a list of Pydantic JsonContent or TextContentBlock.
     """
     year = tool_input.get("year")
     make = tool_input.get("make")
     model = tool_input.get("model")
 
+    # 1. Input Validation (returns TextContentBlock on error)
     if not (year and make and model):
-        return [{"text": "Error: Missing required fields (year, make, model)."}]
+        error_msg = "Error: Missing required fields (year, make, model)."
+        return [TextContentBlock(text=error_msg)]
 
+    # 2. Get Vehicle ID (returns TextContentBlock on failure)
     vehicle_id = _get_vehicle_id(year, make, model)
     if not vehicle_id:
-        return [{"text": f"No vehicle found for {year} {make} {model}."}]
+        error_msg = f"No vehicle found for {year} {make} {model}."
+        return [TextContentBlock(text=error_msg)]
 
+    # 3. Fetch Details
     details = _fetch_vehicle_details(vehicle_id)
-    return [{"json": details}]
+    
+    # 4. Check for API/Parsing error during details fetch
+    if "error" in details:
+        error_msg = f"Could not retrieve details for vehicle ID {vehicle_id}: {details['error']}"
+        return [TextContentBlock(text=error_msg)]
+        
+    # 5. Successful Result (returns JsonContent)
+    # The 'details' dictionary contains the final structured data
+    return [JsonContent(json=details)]

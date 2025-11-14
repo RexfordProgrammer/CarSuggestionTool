@@ -1,7 +1,7 @@
 # tools/__init__.py
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
-from pydantic_models import ToolConfig, ToolSpecsOutput, FullToolSpec, ToolConfigItem
+from pydantic_models import JsonContent, TextContentBlock, ToolConfig, ToolSpecsOutput, FullToolSpec, ToolConfigItem
 
 from . import (
     fetch_models_of_make_year,
@@ -31,16 +31,29 @@ def tool_specs() -> List[FullToolSpec]:
     ]
     return validated_specs
 
-def dispatch(name: str, connection_id: str, tool_input: dict) -> Any:
-    """Dispatch a tool call by exact toolSpec.name."""
+def _normalize_blocks(blocks):
+    normalized = []
+    for b in blocks:
+        if isinstance(b, JsonContent) or isinstance(b, TextContentBlock):
+            normalized.append(b)
+        elif isinstance(b, dict) and "json" in b:
+            normalized.append(JsonContent(json=b["json"]))
+        elif isinstance(b, str):
+            normalized.append(TextContentBlock(text=b))
+        else:
+            # last resort - stringify
+            normalized.append(TextContentBlock(text=str(b)))
+    return normalized
+
+def dispatch(name: str, connection_id: str, tool_input: dict):
     for t in ALL_TOOLS:
         if name == t.SPEC["toolSpec"]["name"]:
-            # NOTE: We rely on the tool module's handle function to be correct.
-            # TODO: optionally use a Pydantic model to validate tool_input here.
-            return t.handle(connection_id, tool_input)
-            
-    raise ValueError(f"Unknown tool: {name}")
+            raw = t.handle(connection_id, tool_input)
+            if not isinstance(raw, list):
+                raw = [raw]
+            return _normalize_blocks(raw)
 
+    raise ValueError(f"Unknown tool: {name}")
 
 def tool_specs_output() -> ToolSpecsOutput:
     """

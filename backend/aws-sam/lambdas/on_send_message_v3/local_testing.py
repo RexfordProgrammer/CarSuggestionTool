@@ -3,11 +3,12 @@ import os
 import random
 import string
 from typing import List
-from db_tools_v2 import save_user_message
-from bedrock_caller_v2 import call_orchestrator
-
 os.environ["AWS_REGION"] = "us-east-1"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+from db_tools_v2 import save_user_message #pylint: disable=wrong-import-position
+from bedrock_caller_v2 import call_orchestrator #pylint: disable=wrong-import-position
+
+
 
 
 def generate_random_string(length: int = 10) -> str:
@@ -24,7 +25,7 @@ if __name__ == "__main__":
     TEST_CONNECTION_ID = generate_random_string()
     class DummyApiGw:
         """Dummy object for reqs"""
-        def post_to_connection(self, connection_id, data):
+        def post_to_connection(self, ConnectionId, Data): #TODO fix case issues this in emitter and here
             """This is just a dummy to satisfy the req"""
 
     dummy_apigw = DummyApiGw()

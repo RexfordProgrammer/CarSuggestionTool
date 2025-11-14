@@ -8,7 +8,6 @@ os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 from db_tools_v2 import save_user_message #pylint: disable=wrong-import-position
 from bedrock_caller_v2 import call_orchestrator #pylint: disable=wrong-import-position
 
-
 def generate_random_string(length: int = 10) -> str:
     """Generates a random token for connecting to dynamodb"""
     characters: str = string.ascii_letters

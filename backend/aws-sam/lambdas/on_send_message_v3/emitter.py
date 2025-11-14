@@ -30,25 +30,27 @@ class Emitter:
             raise ValueError("API Gateway client (apigw)"
                              "must be provided in a non-local environment.")
         self.apigw = apigw
-    # --- helper to normalize text ---
+
     def _to_text(self, data: Any) -> str:
         """Extract a readable string from any shape (Pydantic model, dict, list, etc.)."""
         if data is None:
             return ""
         if isinstance(data, str):
             return data
-        
-        if isinstance(data, BaseModel): data = data.model_dump()
-
+        if isinstance(data, BaseModel):
+            data = data.model_dump()
         if isinstance(data, dict):
             for key in ("reply", "text", "message", "output"):
                 val = data.get(key)
-                if isinstance(val, str): return val
+                if isinstance(val, str):
+                    return val
             if isinstance(data.get("content"), list):
                 parts = []
                 for c in data["content"]:
-                    if isinstance(c, str): parts.append(c)
-                    elif isinstance(c, dict): parts.append(c.get("text") or _safe_json(c))
+                    if isinstance(c, str):
+                        parts.append(c)
+                    elif isinstance(c, dict):
+                        parts.append(c.get("text") or _safe_json(c))
                 return " ".join(p for p in parts if p)
             return _safe_json(data)
 
@@ -60,7 +62,6 @@ class Emitter:
     def _send_remote(self, payload: WebSocketPayload) -> bool:
         """Sends payload to the deployed API Gateway WebSocket."""
         data_bytes = payload.model_dump_json(exclude_none=True).encode("utf-8")
-        
         try:
             self.apigw.post_to_connection(
                 ConnectionId=self.connection_id,
@@ -87,13 +88,12 @@ class Emitter:
             print(f"❌ Failed to coerce text: {e}, payload type={type(text)}")
             return False
 
-        if not text_str: return False
-
+        if not text_str:
+            return False
         print(f"\n\n [EMIT RAW TEXT - chars]\n{text_str}\n\n")
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []
-        
         # Handle large messages by splitting into chunks
         if len(reply_bytes) > _MAX_FRAME_BYTES:
             start = 0
@@ -102,7 +102,6 @@ class Emitter:
             while start < len(reply_bytes):
                 end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
                 chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
-                
                 # FIX APPLIED HERE for chunked message:
                 chunks.append(
                     WebSocketPayload(type="bedrock_reply", reply=f"[{idx}/{total}] {chunk_text}")
@@ -117,9 +116,8 @@ class Emitter:
         for payload in chunks:
             sent = self._send_payload(payload)
             ok_all = ok_all and sent
-            
         return ok_all
-    
+
     # ==========================================================
     # DEBUG EMIT (identical WS shape, no DB save)
     # ==========================================================

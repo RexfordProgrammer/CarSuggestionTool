@@ -1,5 +1,6 @@
 '''Caller of Bedrock converse loop'''
 import os
+import time
 from typing import List
 import boto3
 import botocore
@@ -13,7 +14,8 @@ from tools import dispatch,tool_specs, tool_specs_output
 from emitter import Emitter
 from system_prompt_builder import build_system_prompt
 from prune_history import prune_history
-
+from tools import ToolCall
+ 
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name=os.getenv("AWS_REGION", "us-east-1"),
@@ -67,10 +69,27 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
 
+        tool_calls: list[ToolCall] = []
         for tu in tool_uses:
             emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
-            tr_block:ToolResultContentBlock = dispatch(tu.name, connection_id, tu.input, tu.toolUseId)
-            tool_result_blocks.append(tr_block)
+            new_call:ToolCall= ToolCall(tu.name, connection_id, tu.input, tu.toolUseId)
+            new_call.start_thread()
+            tool_calls.append(new_call)
+            # tr_block:ToolResultContentBlock = dispatch(tu.name, connection_id, tu.input, tu.toolUseId)
+        
+        finished = False
+        while not finished:
+            finished = True
+            for tc in tool_calls:
+                if tc.tool_response is None:
+                    finished = False
+                    continue
+            time.sleep(1)
+        
+        for tc in tool_calls:
+            tool_result_blocks.append(tc.tool_response)
+        
+        # tool_result_blocks.append(tr_block)
 
         if tool_result_blocks:
             user_tool_result_entry = Message(role="user", content=tool_result_blocks)

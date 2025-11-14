@@ -24,8 +24,7 @@ bedrock = boto3.client(
 )
 
 DEBUG = True
-MAX_TURNS = int(os.getenv("MAX_TURNS", "6"))
-HISTORY_WINDOW = max(1, int(os.getenv("HISTORY_WINDOW", "10")))
+MAX_TURNS = int(os.getenv("MAX_TURNS", "4"))
 
 def call_orchestrator(connection_id: str, apigw) -> None:
     """Entry point called from Lambda — orchestrates one round using only transcript memory."""

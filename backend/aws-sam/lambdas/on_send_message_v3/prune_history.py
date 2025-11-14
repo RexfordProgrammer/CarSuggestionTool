@@ -1,8 +1,8 @@
 
-HISTORY_WINDOW_SOFT_CLIP = 7 # The number of recent messages to always keep
+HISTORY_WINDOW_SOFT_CLIP = 10 # The number of recent messages to always keep
 
 from typing import List
-from pydantic_models import Message, ToolResultContentBlock
+from pydantic_models import Message, ToolResultContentBlock,ToolUseContentBlock
 
 
 def prune_history(history: List[Message]) -> List[Message]:
@@ -18,9 +18,10 @@ def prune_history(history: List[Message]) -> List[Message]:
         if (current_message.role=="assistant"):
             pruned_history.pop(0)
         is_tool_result_content = any(
-            isinstance(block, ToolResultContentBlock) 
+            isinstance(block, ToolResultContentBlock) or  isinstance(block, ToolUseContentBlock)
             for block in current_message.content
         )
+        
         if is_tool_result_content and len(current_message.content) == len(pruned_history[0].content):
             pruned_history.pop(0)
         else:

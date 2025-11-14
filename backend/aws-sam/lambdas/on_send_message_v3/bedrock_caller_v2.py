@@ -8,9 +8,7 @@ from db_tools_v2 import (build_history_messages, save_assistant_message, save_us
 
 from pydantic_models import (ConversePayload, FullToolSpec, Message,
                              ToolConfig, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
-from typing import List
-from pydantic_models import Message, ToolResultContentBlock 
-from converse_pydantic import ConverseResponse
+from converse_response_pydantic import ConverseResponse
 from tools import dispatch,tool_specs, tool_specs_output
 from emitter import Emitter
 from system_prompt_builder import build_system_prompt
@@ -28,11 +26,8 @@ MAX_TURNS = int(os.getenv("MAX_TURNS", "4"))
 def call_orchestrator(connection_id: str, apigw) -> None:
     """Entry point called from Lambda — orchestrates one round using only transcript memory."""
     emitter = Emitter(apigw, connection_id,DEBUG)
-
     emitter.debug_emit("Starting call_orchestrator", {"connection_id": connection_id})
-
     history: List[Message] = build_history_messages(connection_id)
-    
     ### this begins upon message sent from frontend
     for turn in range(MAX_TURNS):
         history = prune_history(history) ## This may be something we want to do in like the db_helpers
@@ -41,7 +36,8 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         emitter.debug_emit(f"Turn {turn}History: ", history)
 
         tool_specs_list:  List[FullToolSpec] = tool_specs()
-        system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS)
+        system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS) ## turn aware prompt builder
+        
         tool_info_blocks: ToolSpecsOutput = tool_specs_output()
         tool_config: ToolConfig = tool_info_blocks.tool_config
         payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",

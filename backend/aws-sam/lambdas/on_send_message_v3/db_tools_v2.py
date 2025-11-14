@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from pydantic_models import ToolResultContentBlock
 
-from converse_pydantic import (
+from converse_response_pydantic import (
     ConverseResponse,
 Message,
     TextContentBlock,

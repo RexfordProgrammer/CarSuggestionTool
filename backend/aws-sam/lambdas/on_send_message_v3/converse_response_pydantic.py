@@ -39,14 +39,3 @@ class ConverseResponse(BaseModel):
             if isinstance(block, ToolUseContentBlock):
                 tools.append(block.toolUse)
         return tools
-    
-
-def get_tool_info_blocks() -> ToolConfig:
-    """
-    Retrieves the necessary tool configuration data by calling tool_specs()
-    and extracts the Pydantic ToolConfig object.
-    """
-    tool_specs_output = tool_specs()
-    tool_config_blocks = tool_specs_output.tool_config
-    
-    return tool_config_blocks

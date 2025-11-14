@@ -66,12 +66,12 @@ class Emitter:
         url = f"{self.local_ws_url}/@connections/{self.connection_id}"
         try:
             res = requests.post(url, json=payload, timeout=5)
-            print(f"📨 [LOCAL EMIT] {res.status_code} → {url}")
+            print(f"[LOCAL EMIT] {res.status_code} → {url}")
             if res.status_code >= 400:
-                print(f"❌ Local emit error body: {res.text[:500]}")
+                print(f"Local emit error body: {res.text[:500]}")
             return res.ok
         except Exception as e:
-            print(f"❌ Local emit failed: {e}")
+            print(f"Local emit failed: {e}")
             return False
 
     # --- remote send ---
@@ -83,7 +83,7 @@ class Emitter:
                 ConnectionId=self.connection_id,
                 Data=data_bytes,
             )
-            print(f"📨 [REMOTE EMIT] bytes={len(data_bytes)} to {self.connection_id}")
+            # print(f"\n[REMOTE EMIT] bytes={len(data_bytes)} to {self.connection_id}")
             return True
         except Exception as e:
             print(f"❌ Remote emit failed: {e}")
@@ -93,7 +93,8 @@ class Emitter:
     def _send_payload(self, payload: dict) -> bool:
         """Send payload either locally or via API GW."""
         try:
-            print("🪵 [FULL EMIT LOG] →", _safe_json(payload))
+            if (self.debug):
+                print("🪵 [FULL EMIT LOG] →", _safe_json(payload))
         except Exception as e:
             print(f"⚠️ Failed to log payload: {e}")
 
@@ -116,13 +117,8 @@ class Emitter:
             # Don't send empty messages
             return False
 
-        print(f"\n🪵 [EMIT RAW TEXT - {len(text_str)} chars]\n{text_str}\n")
+        print(f"\n\n [EMIT RAW TEXT - chars]\n{text_str}\n\n")
         
-        #
-        # 🛑 PERSISTENCE LOGIC REMOVED 🛑
-        # The orchestrator (call_orchestrator) is now solely responsible 
-        # for saving messages to the database via its helpers.
-        #
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []

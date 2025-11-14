@@ -1,37 +1,18 @@
 import requests
 from typing import Dict, List, Any, Union
-from pydantic import BaseModel, Field
 
-# Assuming these Pydantic models are imported from a module like 'pydantic_models'
-# NOTE: In a real system, you would only import these from a central file.
-class TextContentBlock(BaseModel):
-    """A simple text block."""
-    text: str
-
-class JsonContent(BaseModel):
-    """The JSON payload for a tool result."""
-    json: Dict[str, Any]
-
-class ToolInputSchema(BaseModel):
-    """Models the 'inputSchema' part of the tool specification."""
-    json: Dict[str, Any] = Field(..., alias="json") 
-
-class ToolSpec(BaseModel):
-    """The core specification for a single tool."""
-    name: str
-    description: str
-    inputSchema: ToolInputSchema
-
-class FullToolSpec(BaseModel):
-    """Models the complete SPEC object required by the tool modules (t.SPEC)."""
-    toolSpec: ToolSpec
-    
-# Define the consistent return type for the handle function
-HandleReturnType = List[Union[JsonContent, TextContentBlock]]
-
+from pydantic_models import (
+    ToolResultContentBlock,
+    ToolResult,
+    TextContentBlock,
+    JsonContent,
+    ToolInputSchema,
+    ToolSpec,
+    FullToolSpec,
+)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Bedrock tool spec (Converted to Pydantic and dumped back)
+# Bedrock tool spec (converted to Pydantic)
 # ────────────────────────────────────────────────────────────────────────────────
 SPEC = FullToolSpec(
     toolSpec=ToolSpec(
@@ -53,24 +34,30 @@ SPEC = FullToolSpec(
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Helper function (Modified to signal failure via a Dict)
+# Helper — returns list OR {"error": "..."}
 # ────────────────────────────────────────────────────────────────────────────────
-def _fetch_from_nhtsa(year: int, make: str = "Toyota") -> Union[List[Dict[str, Any]], Dict[str, str]]:
+def _fetch_from_nhtsa(
+    year: int, make: str = "Toyota"
+) -> Union[List[Dict[str, Any]], Dict[str, str]]:
     """
-    Fetch models for a given make/year. Returns list of models on success, 
-    or a dictionary with an 'error' key on failure.
+    Fetch models for a given make/year.
+    Returns:
+      - List of dicts (success)
+      - {"error": "..."} on failure
     """
+
     url = (
         f"https://vpic.nhtsa.dot.gov/api/vehicles/"
         f"GetModelsForMakeYear/make/{make}/modelyear/{year}?format=json"
     )
+
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
+
         data = resp.json()
         results = data.get("Results", []) or []
 
-        # Only keep Make_Name and Model_Name, NEVER Model_ID
         return [
             {
                 "Make_Name": r.get("Make_Name"),
@@ -79,58 +66,75 @@ def _fetch_from_nhtsa(year: int, make: str = "Toyota") -> Union[List[Dict[str, A
             for r in results
             if r.get("Model_Name")
         ]
+
     except Exception as e:
         print(f"Error fetching data from NHTSA: {e}")
-        return {"error": str(e)} # Return error dict
+        return {"error": str(e)}
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Bedrock tool entry-point (MODIFIED)
+# TOOL ENTRYPOINT — Always returns ToolResultContentBlock
 # ────────────────────────────────────────────────────────────────────────────────
-def handle(connection_id: str, tool_input: Dict) -> HandleReturnType:
+def handle(connection_id: str, tool_input: Dict[str, Any], tool_use_id: str) -> ToolResultContentBlock:
     """
-    Handler function for Bedrock tool orchestration.
-    Returns a List of Pydantic JsonContent or TextContentBlock.
+    Fetch models for a given make/year and ALWAYS return a ToolResultContentBlock.
     """
+
     year = tool_input.get("year")
     make = tool_input.get("make", "Toyota")
-    
-    # Simple input validation, although the API handles year typing.
+
+    # 1. Validate input
     if not year:
-        return [TextContentBlock(text="Error: Missing required input 'year'.")]
+        tb = TextContentBlock(text="Error: Missing required input 'year'.")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
 
     try:
         year_int = int(year)
     except ValueError:
-        return [TextContentBlock(text="Error: 'year' must be an integer.")]
+        tb = TextContentBlock(text="Error: 'year' must be an integer.")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
 
-    # Fetch data
-    cars_result = _fetch_from_nhtsa(year_int, make)
-    
-    # 1. Check for API/network failure
-    if isinstance(cars_result, dict) and "error" in cars_result:
-        error_msg = f"NHTSA API call failed: {cars_result['error']}"
-        return [TextContentBlock(text=error_msg)]
+    # 2. Fetch data
+    result = _fetch_from_nhtsa(year_int, make)
 
-    # 2. Assign the successful result list
-    cars: List[Dict[str, Any]] = cars_result
+    # 3. Error from API or connection issue
+    if isinstance(result, dict) and "error" in result:
+        tb = TextContentBlock(text=f"NHTSA API call failed: {result['error']}")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
 
+    cars: List[Dict[str, Any]] = result
+
+    # 4. No cars found
     if not cars:
-        # Explicit “no results” case (structured data)
-        response_data = {
+        jc = JsonContent(
+            json={
+                "year": year_int,
+                "make": make,
+                "count": 0,
+                "vehicles": [],
+                "message": f"No models found for make='{make}' in year={year_int}.",
+            }
+        )
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[jc])
+        )
+
+    # 5. Normal success
+    jc = JsonContent(
+        json={
             "year": year_int,
             "make": make,
-            "count": 0,
-            "vehicles": [],
-            "message": f"No models found for make='{make}' in year={year_int}.",
+            "count": len(cars),
+            "vehicles": cars[:100],  # consistent with your original capping
         }
-        return [JsonContent(json=response_data)]
+    )
 
-    # 3. Normal case (structured data)
-    response_data = {
-        "year": year_int,
-        "make": make,
-        "count": len(cars),
-        "vehicles": cars[:100],  # still capped at 100
-    }
-    return [JsonContent(json=response_data)]
+    return ToolResultContentBlock(
+        toolResult=ToolResult(toolUseId=tool_use_id, content=[jc])
+    )

@@ -2,33 +2,10 @@
 import requests
 from typing import Dict, List, Any, Union
 
-# Assuming these Pydantic models are imported from a module like 'pydantic_models'
-from pydantic import BaseModel, Field # We'll assume these are available
-# from pydantic_models import TextContentBlock, JsonContent # Assume this for real life
+from pydantic_models import (ToolResultContentBlock, TextContentBlock,
+                             JsonContent, ToolResult,
+                             ToolInputSchema, ToolSpec, FullToolSpec)
 
-# --- NECESSARY PYDANTIC MODELS (for local context) ---
-# NOTE: In a real system, you would only import these from a central file.
-class TextContentBlock(BaseModel):
-    """A simple text block."""
-    text: str
-
-class JsonContent(BaseModel):
-    """The JSON payload for a tool result."""
-    json: Dict[str, Any]
-
-class ToolInputSchema(BaseModel):
-    """Models the 'inputSchema' part of the tool specification."""
-    json: Dict[str, Any] = Field(..., alias="json") 
-
-class ToolSpec(BaseModel):
-    """The core specification for a single tool."""
-    name: str
-    description: str
-    inputSchema: ToolInputSchema
-
-class FullToolSpec(BaseModel):
-    """Models the complete SPEC object required by the tool modules (t.SPEC)."""
-    toolSpec: ToolSpec
 
 # Define the consistent return type for the handle function
 HandleReturnType = List[Union[JsonContent, TextContentBlock]]
@@ -145,37 +122,61 @@ def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
         "ratings": ratings
     }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# Bedrock tool entry-point (MODIFIED)
-# ────────────────────────────────────────────────────────────────────────────────
-def handle(connection_id: str, tool_input: Dict[str, Any]) -> HandleReturnType:
+def handle(connection_id: str, tool_input: Dict[str, Any], tool_use_id: str) -> ToolResultContentBlock:
     """
-    Bedrock-style wrapper.
-    Returns a list containing a Pydantic JsonContent (on success) or
-    TextContentBlock (on error).
+    Handle safety rating lookup and ALWAYS return a ToolResultContentBlock.
     """
+
     year  = tool_input.get("year")
     make  = tool_input.get("make")
     model = tool_input.get("model")
 
-    # 1. Input Validation (returns TextContentBlock on error)
+    # ---------------------------
+    # 1. Input Validation
+    # ---------------------------
     if not (year and make and model):
-        return [TextContentBlock(text="Error: Missing 'year', 'make', or 'model'.")]
+        tb = TextContentBlock(text="Error: Missing 'year', 'make', or 'model'.")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(
+                toolUseId=tool_use_id,
+                content=[tb]
+            )
+        )
 
+    # ---------------------------
+    # 2. Try execution
+    # ---------------------------
     try:
-        # 2. Fetch the rating, handles internal retries
         result = _fetch_safety_rating(int(year), make, model)
     except Exception as e:
-        # 3. Handle unexpected API failure (e.g., network error, DNS)
-        error_msg = f"Unexpected failure while querying safety ratings: {e}"
-        return [TextContentBlock(text=error_msg)]
+        tb = TextContentBlock(text=f"Unexpected failure while querying safety ratings: {e}")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(
+                toolUseId=tool_use_id,
+                content=[tb]
+            )
+        )
 
-    # 4. Check for a structured error message placed by the helper function
-    if "error" in result:
-        error_msg = f"Safety rating retrieval failed: {result['error']}"
-        return [TextContentBlock(text=error_msg)]
+    # ---------------------------
+    # 3. Structured-error case
+    # ---------------------------
+    if isinstance(result, dict) and "error" in result:
+        tb = TextContentBlock(text=f"Safety rating retrieval failed: {result['error']}")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(
+                toolUseId=tool_use_id,
+                content=[tb]
+            )
+        )
 
-    # 5. Successful Result or No Data Found Note (returns JsonContent)
-    # The _fetch_safety_rating function guarantees a structured dictionary
-    # even when no data is found (with a "note" field).
-    return [JsonContent(json=result)]
+    # ---------------------------
+    # 4. SUCCESS — Always JsonContent
+    # ---------------------------
+    jc = JsonContent(json=result)
+
+    return ToolResultContentBlock(
+        toolResult=ToolResult(
+            toolUseId=tool_use_id,
+            content=[jc]
+        )
+    )

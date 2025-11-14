@@ -38,11 +38,6 @@ if __name__ == "__main__":
     class DummyApiGw:
         def post_to_connection(self, ConnectionId, Data):
             print("\n")
-            ###[DummyApiGw] post_to_connection → {ConnectionId}")
-            # try:
-            #     # print(Data.decode("utf-8")[:500])
-            # except Exception:
-            #     print(repr(Data)[:500])
 
     dummy_apigw = DummyApiGw()
     

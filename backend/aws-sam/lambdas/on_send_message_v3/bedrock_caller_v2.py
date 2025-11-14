@@ -68,7 +68,8 @@ def call_orchestrator(connection_id: str, apigw) -> None:
                 break
         
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
-
+        
+        #### REFACTOR FROM HERE TO BELOW MARKER INTO METHOD
         tool_calls: list[ToolCall] = []
         for tu in tool_uses:
             emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
@@ -84,13 +85,12 @@ def call_orchestrator(connection_id: str, apigw) -> None:
                 if tc.tool_response is None:
                     finished = False
                     continue
-            time.sleep(1)
+            time.sleep(.2)
         
         for tc in tool_calls:
             tool_result_blocks.append(tc.tool_response)
+        ###################### THIS WILL RETURN TOOL USE BLOCKS
         
-        # tool_result_blocks.append(tr_block)
-
         if tool_result_blocks:
             user_tool_result_entry = Message(role="user", content=tool_result_blocks)
             save_user_tool_results(connection_id, tool_result_blocks)

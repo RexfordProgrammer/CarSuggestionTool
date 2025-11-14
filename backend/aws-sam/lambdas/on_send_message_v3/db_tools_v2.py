@@ -6,13 +6,8 @@ from pydantic import ValidationError
 
 from pydantic_models import ToolResultContentBlock
 
-from converse_response_pydantic import (
-    ConverseResponse,
-Message,
-    TextContentBlock,
-)
+from converse_response_pydantic import (ConverseResponse,Message,TextContentBlock,)
 
-# --- DynamoDB Setup ---
 dynamodb = boto3.resource("dynamodb")
 messages_table = dynamodb.Table("messages")
 
@@ -39,7 +34,7 @@ def append_message_entry_to_db(connection_id: str, message: Message) -> None:
             UpdateExpression="SET messages = list_append(if_not_exists(messages, :empty), :new)",
             ExpressionAttributeValues={":empty": [], ":new": [decimal_message]},
         )
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         print(f"Error appending message to DB for {connection_id}: {e}")
 
 def save_assistant_message(connection_id: str, resp: ConverseResponse):
@@ -94,7 +89,7 @@ def get_session_messages(connection_id: str) -> List[Message]:
     except ValidationError as e:
         print(f"Data validation error for {connection_id}: {e}")
         return []
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         print(f"Error retrieving session messages for {connection_id}: {e}")
         return []
 
@@ -106,6 +101,6 @@ def build_history_messages(connection_id: str) -> List[Message]:
     try:
         messages = get_session_messages(connection_id) or []
         return messages
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         print(f"Error building history for {connection_id}: {e}")
         return []

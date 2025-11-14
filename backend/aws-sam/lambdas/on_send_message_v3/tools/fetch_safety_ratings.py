@@ -1,22 +1,23 @@
 # tools/fetch_safety_ratings.py
 import requests
 from typing import Dict, List, Any
-import json 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# Bedrock tool spec
+# ────────────────────────────────────────────────────────────────────────────────
 SPEC = {
     "toolSpec": {
         "name": "fetch_safety_ratings",
-        "description": (
-            "Retrieve NHTSA 5-Star safety ratings for a specific vehicle "
-            "by make, model, and year."
-        ),
+        "description": "Get NHTSA crash-test ratings (overall, front, side, rollover) "
+                       "for a specific {year, make, model}. Retries ±1 year if the "
+                       "exact year has no published data.",
         "inputSchema": {
             "json": {
                 "type": "object",
                 "properties": {
-                    "year": {"type": "integer", "description": "Model year (e.g., 2020)"},
-                    "make": {"type": "string", "description": "Vehicle make (e.g., Honda)"},
-                    "model": {"type": "string", "description": "Vehicle model (e.g., Civic)"}
+                    "year":  {"type": "integer", "description": "Model year (e.g., 2020)"},
+                    "make":  {"type": "string",  "description": "Make (e.g., Ford)"},
+                    "model": {"type": "string",  "description": "Model (e.g., Ranger)"}
                 },
                 "required": ["year", "make", "model"],
                 "additionalProperties": False
@@ -25,48 +26,80 @@ SPEC = {
     }
 }
 
+# ────────────────────────────────────────────────────────────────────────────────
+# Core helpers
+# ────────────────────────────────────────────────────────────────────────────────
+def _query_summary(year: int, make: str, model: str) -> List[Dict[str, Any]]:
+    """Call the summary endpoint and return its Results list (may be empty)."""
+    url = (
+        f"https://api.nhtsa.gov/SafetyRatings/modelyear/{year}"
+        f"/make/{make}/model/{model}?format=json"
+    )
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    return resp.json().get("Results", [])
+
+
+def _query_vehicle_detail(vehicle_id: int) -> Dict[str, Any]:
+    """Return the first (and only) result for a specific VehicleId."""
+    url = f"https://api.nhtsa.gov/SafetyRatings/VehicleId/{vehicle_id}?format=json"
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    all_results = resp.json().get("Results", [])
+    return all_results[0] if all_results else {}
+
+
 def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
-    """Query the NHTSA Safety Ratings API and resolve each VehicleId to get full ratings."""
-    base_url = f"https://api.nhtsa.gov/SafetyRatings/modelyear/{year}/make/{make}/model/{model}?format=json"
-    try:
-        resp = requests.get(base_url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        print(f"Error fetching safety rating: {e}")
-        return {"error": str(e)}
+    """
+    Fetch ratings for {year, make, model}.
+    If the exact year is empty, retry (year+1) then (year-1).
+    """
+    results = _query_summary(year, make, model)
 
-    results = data.get("Results", [])
     if not results:
-        return {"error": "No safety data found."}
+        for alt in (year + 1, year - 1):
+            try:
+                results = _query_summary(alt, make, model)
+            except Exception:
+                results = []
+            if results:
+                year = alt
+                break
 
-    ratings = []
+    if not results:
+        return {
+            "year": year,
+            "make": make,
+            "model": model,
+            "count": 0,
+            "ratings": [],
+            "note": "NHTSA has no published safety data for this model/year."
+        }
+
+    ratings: List[Dict[str, Any]] = []
     for r in results:
-        vid = r.get("VehicleId")
-        desc = r.get("VehicleDescription")
+        vid  = r.get("VehicleId")
+        desc = r.get("VehicleDescription", "")
 
+        # Defensive check
         if not vid:
             continue
 
-        # ✅ Fetch full rating details for each vehicle ID
         try:
-            detail_resp = requests.get(f"https://api.nhtsa.gov/SafetyRatings/VehicleId/{vid}?format=json", timeout=10)
-            detail_resp.raise_for_status()
-            detail_data = detail_resp.json()
-            full_info = detail_data.get("Results", [{}])[0]
+            detail = _query_vehicle_detail(vid)
         except Exception as e:
-            print(f"Error fetching VehicleId {vid}: {e}")
-            full_info = {}
+            detail = {}
+            detail["error"] = f"Failed to fetch VehicleId {vid}: {e}"
 
         ratings.append({
             "VehicleDescription": desc,
             "VehicleId": vid,
-            "OverallRating": full_info.get("OverallRating"),
-            "OverallFrontCrashRating": full_info.get("OverallFrontCrashRating"),
-            "OverallSideCrashRating": full_info.get("OverallSideCrashRating"),
-            "RolloverRating": full_info.get("RolloverRating"),
-            "SidePoleCrashRating": full_info.get("SidePoleCrashRating"),
-            "SideBarrierRatingOverall": full_info.get("SideBarrierRatingOverall"),
+            "OverallRating": detail.get("OverallRating"),
+            "OverallFrontCrashRating": detail.get("OverallFrontCrashRating"),
+            "OverallSideCrashRating": detail.get("OverallSideCrashRating"),
+            "RolloverRating": detail.get("RolloverRating"),
+            "SidePoleCrashRating": detail.get("SidePoleCrashRating"),
+            "SideBarrierRatingOverall": detail.get("SideBarrierRatingOverall"),
         })
 
     return {
@@ -77,15 +110,25 @@ def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
         "ratings": ratings
     }
 
-
-def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
-    """Main Bedrock-style tool handler."""
-    year = tool_input.get("year")
-    make = tool_input.get("make")
+# ────────────────────────────────────────────────────────────────────────────────
+# Bedrock tool entry-point
+# ────────────────────────────────────────────────────────────────────────────────
+def handle(connection_id: str, tool_input: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Bedrock-style wrapper.
+    Returns a list containing a single JSON block so the orchestrator can
+    drop it directly into a `toolResult`.
+    """
+    year  = tool_input.get("year")
+    make  = tool_input.get("make")
     model = tool_input.get("model")
 
     if not (year and make and model):
         return [{"text": "Error: Missing 'year', 'make', or 'model'."}]
 
-    result = _fetch_safety_rating(int(year), make, model)
+    try:
+        result = _fetch_safety_rating(int(year), make, model)
+    except Exception as e:
+        result = {"error": f"Unexpected failure: {e}"}
+
     return [{"json": result}]

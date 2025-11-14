@@ -3,7 +3,7 @@
   Launches the Car Suggestion Tool local SAM + WebSocket stack.
   - Loads credentials from aws.creds.ps1 (or AWS CLI profile if missing)
   - Optionally rebuilds SAM
-  - Starts Lambda + WebSocket proxy
+  - Starts Lambda + WebSocket proxy + Frontend (parallel)
 #>
 
 Set-Location -Path $PSScriptRoot
@@ -119,6 +119,8 @@ if ($rebuild -match '^[Yy]') {
 Write-Host "🧠 Starting local Lambda runtime on port $SAM_PORT..."
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "sam local start-lambda --template $TEMPLATE_FILE --port $SAM_PORT --env-vars $ENV_FILE --region $REGION" -WindowStyle Minimized
 
+
+
 # ==========================
 # HEALTH CHECK LOOP
 # ==========================
@@ -144,6 +146,7 @@ if (-not $lambdaReady) {
 # ==========================
 Write-Host "🔗 Starting WebSocket proxy on port $WS_PORT..."
 Start-Process "node" -ArgumentList "ws-stub.js" -NoNewWindow
+Write-Host "✅ WebSocket proxy launched in background." -ForegroundColor Green
 
 # ==========================
 # FRONTEND CONNECTION INFO

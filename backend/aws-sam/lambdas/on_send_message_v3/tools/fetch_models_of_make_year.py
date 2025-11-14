@@ -1,0 +1,78 @@
+import requests
+from typing import Dict, List, Any
+
+SPEC = {
+    "toolSpec": {
+        "name": "fetch_models_of_make_year",
+        "description": "Used to get models of a particular make from a particular year",
+        "inputSchema": {
+            "json": {
+                "type": "object",
+                "properties": {
+                    "year": {"type": "integer"},
+                    "make": {"type": "string"},
+                },
+                "required": ["year"],
+            }
+        },
+    }
+}
+
+
+def _fetch_from_nhtsa(year: int, make: str = "Toyota") -> List[Dict[str, Any]]:
+    """Fetch models for a given make/year. Returns only make + model."""
+    url = (
+        f"https://vpic.nhtsa.dot.gov/api/vehicles/"
+        f"GetModelsForMakeYear/make/{make}/modelyear/{year}?format=json"
+    )
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("Results", []) or []
+
+        # Only keep Make_Name and Model_Name, NEVER Model_ID
+        return [
+            {
+                "Make_Name": r.get("Make_Name"),
+                "Model_Name": r.get("Model_Name"),
+            }
+            for r in results
+            if r.get("Model_Name")
+        ]
+    except Exception as e:
+        print(f"Error fetching data from NHTSA: {e}")
+        return []
+
+
+def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
+    year = int(tool_input.get("year"))
+    make = tool_input.get("make", "Toyota")
+
+    cars = _fetch_from_nhtsa(year, make)
+
+    if not cars:
+        # Explicit “no results” case
+        return [
+            {
+                "json": {
+                    "year": year,
+                    "make": make,
+                    "count": 0,
+                    "vehicles": [],
+                    "message": f"No models found for make='{make}' in year={year}.",
+                }
+            }
+        ]
+
+    # Normal case
+    return [
+        {
+            "json": {
+                "year": year,
+                "make": make,
+                "count": len(cars),
+                "vehicles": cars[:100],  # still capped at 100
+            }
+        }
+    ]

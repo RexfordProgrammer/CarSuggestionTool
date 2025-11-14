@@ -6,9 +6,8 @@ import botocore
 
 from db_tools_v2 import (build_history_messages, save_assistant_message, save_user_tool_results)
 
-from pydantic_models import (ConversePayload, FullToolSpec, Message, 
-                            TextContentBlock, ToolConfig,
-                            ToolResult, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
+from pydantic_models import (ConversePayload, FullToolSpec, Message,
+                             ToolConfig, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
 from typing import List
 from pydantic_models import Message, ToolResultContentBlock 
 from converse_pydantic import ConverseResponse
@@ -39,13 +38,12 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         history = prune_history(history) ## This may be something we want to do in like the db_helpers
         tool_result_blocks: List[ToolResultContentBlock] = []
 
-        emitter.debug_emit("History: ", history)
+        emitter.debug_emit(f"Turn {turn}History: ", history)
 
         tool_specs_list:  List[FullToolSpec] = tool_specs()
-        system_prompt = build_system_prompt(tool_specs_list)
+        system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS)
         tool_info_blocks: ToolSpecsOutput = tool_specs_output()
         tool_config: ToolConfig = tool_info_blocks.tool_config
-        # payload = build_payload(history)
         payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",
                                   system=[system_prompt],
                                   messages=history,
@@ -77,11 +75,6 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         for tu in tool_uses:
             emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
             tr_block:ToolResultContentBlock = dispatch(tu.name, connection_id, tu.input, tu.toolUseId)
-            # if not isinstance(validated_content, list):
-            #     raise TypeError("Tool handler did not return a list of Pydantic content blocks.")
-            # tr = ToolResult(toolUseId=tu.toolUseId, content=validated_content)
-            # tr_contblock: ToolResultContentBlock = ToolResultContentBlock(toolResult=tr)
-            # #List[ToolResultContentBlock]
             tool_result_blocks.append(tr_block)
 
         if tool_result_blocks:

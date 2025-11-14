@@ -24,7 +24,6 @@ class ConverseResponse(BaseModel):
             if isinstance(block, TextContentBlock):
                 texts.append(block)
         return texts
-    
     def get_text(self) -> str:
         """Extracts text from the response message."""
         for block in self.output.message.content:

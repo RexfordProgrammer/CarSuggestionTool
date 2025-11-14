@@ -45,11 +45,10 @@ def call_orchestrator(connection_id: str, apigw) -> None:
                                   messages=history,
                                   interferenceConfig={"temperature": 0.5},
                                   toolConfig=tool_config)
-            
         try:
             resp = bedrock.converse(**payload.to_api_dict())
             response = ConverseResponse.model_validate(resp)
-        except Exception as e: #pylint: disable=broad-except
+        except Exception as e: #pylint: disable=broad-exception-caught
             err = f"Model call failed: {e}"
             emitter.emit(err)
             break

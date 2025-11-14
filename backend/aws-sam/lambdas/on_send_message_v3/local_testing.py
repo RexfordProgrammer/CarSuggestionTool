@@ -9,8 +9,6 @@ from db_tools_v2 import save_user_message #pylint: disable=wrong-import-position
 from bedrock_caller_v2 import call_orchestrator #pylint: disable=wrong-import-position
 
 
-
-
 def generate_random_string(length: int = 10) -> str:
     """Generates a random token for connecting to dynamodb"""
     characters: str = string.ascii_letters
@@ -24,8 +22,8 @@ def generate_random_string(length: int = 10) -> str:
 if __name__ == "__main__":
     TEST_CONNECTION_ID = generate_random_string()
     class DummyApiGw:
-        """Dummy object for reqs"""
-        def post_to_connection(self, ConnectionId, Data): #TODO fix case issues this in emitter and here
+        """Dummy object for reqs, note (not my decision of var names)""" 
+        def post_to_connection(self, ConnectionId, Data): #pylint: disable=invalid-name 
             """This is just a dummy to satisfy the req"""
 
     dummy_apigw = DummyApiGw()

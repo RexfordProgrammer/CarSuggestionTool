@@ -1,7 +1,6 @@
 from typing import List, Literal
 from pydantic import BaseModel
-from tools import tool_specs
-from pydantic_models import Message,Output, ToolConfig,Usage,TextContentBlock,ToolUse,ToolUseContentBlock
+from pydantic_models import Message,Output,Usage,TextContentBlock,ToolUse,ToolUseContentBlock
 
 
 class ConverseResponse(BaseModel):

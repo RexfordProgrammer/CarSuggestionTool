@@ -1,20 +1,15 @@
+"""This file manages emmissions to API"""
 import json
-import os
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 import boto3
-import botocore
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-# --- Pydantic Model for Outgoing WebSocket Payload ---
 class WebSocketPayload(BaseModel):
     """Model for the data sent over the WebSocket."""
-    # Fix applied: Use Literal for constant value, which makes it a required field.
-    type: Literal["bedrock_reply"] 
+    type: Literal["bedrock_reply"]
     reply: str
 
-# --- Constants ---
-# Max message size for API Gateway WebSocket (32KB), using a safety margin
-_MAX_FRAME_BYTES = 28_000 
+_MAX_FRAME_BYTES = 28_000
 
 def _safe_json(obj: Any) -> str:
     """Safely serialize an object to a JSON string."""
@@ -22,9 +17,8 @@ def _safe_json(obj: Any) -> str:
         if isinstance(obj, BaseModel):
             return obj.model_dump_json(exclude_none=True)
         return json.dumps(obj, ensure_ascii=False, default=str)
-    except Exception:
+    except Exception: #pylint: disable=broad-exception-caught
         return str(obj)
-
 
 class Emitter:
     """Handles sending messages to the connected client via API Gateway WebSocket."""
@@ -32,16 +26,17 @@ class Emitter:
     def __init__(self, apigw: boto3.client, connection_id: str, debug: bool = True):
         self.debug = debug
         self.connection_id = connection_id
-        
         if apigw is None:
-             raise ValueError("API Gateway client (apigw) must be provided in a non-local environment.")
+            raise ValueError("API Gateway client (apigw)"
+                             "must be provided in a non-local environment.")
         self.apigw = apigw
-        
     # --- helper to normalize text ---
     def _to_text(self, data: Any) -> str:
         """Extract a readable string from any shape (Pydantic model, dict, list, etc.)."""
-        if data is None: return ""
-        if isinstance(data, str): return data
+        if data is None:
+            return ""
+        if isinstance(data, str):
+            return data
         
         if isinstance(data, BaseModel): data = data.model_dump()
 
@@ -72,8 +67,8 @@ class Emitter:
                 Data=data_bytes,
             )
             return True
-        except Exception as e:
-            print(f"❌ Remote emit failed (Connection ID: {self.connection_id}): {e}")
+        except Exception as e: #pylint: disable=broad-exception-caught
+            print(f"Remote emit failed (Connection ID: {self.connection_id}): {e}")
             return False
 
     # --- shared send (internal) ---
@@ -88,7 +83,7 @@ class Emitter:
         """Emit user-facing text to the WebSocket."""
         try:
             text_str = self._to_text(text).strip()
-        except Exception as e:
+        except Exception as e: #pylint: disable=broad-exception-caught
             print(f"❌ Failed to coerce text: {e}, payload type={type(text)}")
             return False
 
@@ -130,20 +125,17 @@ class Emitter:
     # ==========================================================
     def debug_emit(self, label: str, data: Any) -> None:
         """Emit debug info to the chat."""
-        if not self.debug: return
-            
+        if not self.debug:
+            return
         try:
             serialized_data = json.dumps(data, indent=2, default=str)
             text = f"[DEBUG] {label}:\n" + serialized_data
-        except Exception:
+        except Exception: #pylint: disable=broad-exception-caught
             text = f"[DEBUG] {label}:\n" + str(data)
 
-        print(f"\n🪵 {text}\n")
-
-        # ---- send to WS exactly like emit() ----
+        print(f"\n Log: {text}\n")
         reply_bytes = text.encode("utf-8")
         chunks = []
-        
         if len(reply_bytes) > _MAX_FRAME_BYTES:
             start = 0
             idx = 1
@@ -151,15 +143,12 @@ class Emitter:
             while start < len(reply_bytes):
                 end = min(start + _MAX_FRAME_BYTES, len(reply_bytes))
                 chunk_text = reply_bytes[start:end].decode("utf-8", errors="ignore")
-                
-                # FIX APPLIED HERE for chunked debug message:
                 chunks.append(
                     WebSocketPayload(type="bedrock_reply", reply=f"[{idx}/{total}] {chunk_text}")
                 )
                 start = end
                 idx += 1
         else:
-            # FIX APPLIED HERE for single debug message:
             chunks.append(WebSocketPayload(type="bedrock_reply", reply=text))
 
         for payload in chunks:

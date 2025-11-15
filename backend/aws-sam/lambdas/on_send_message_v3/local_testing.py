@@ -26,7 +26,8 @@ if __name__ == "__main__":
             """This is just a dummy to satisfy the req"""
 
     dummy_apigw = DummyApiGw()
+    print ("\n\n\n\n\n\n============Local Session Sanbox============\n\n\n\n")
     while True:
-        somebs = input("\nUser:")
+        somebs = input("User: ")
         save_user_message( TEST_CONNECTION_ID, somebs)
-        call_orchestrator(TEST_CONNECTION_ID, dummy_apigw)
+        call_orchestrator(TEST_CONNECTION_ID, dummy_apigw, True)

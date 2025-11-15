@@ -12,6 +12,7 @@ from . import (
     fetch_models_of_make_year,
     fetch_gas_mileage,
     fetch_safety_ratings,
+    fetch_price_of_car
     # fetch_all_makes,   # ← don't forget to add this to ALL_TOOLS
 )
 
@@ -19,6 +20,7 @@ ALL_TOOLS = [
     fetch_models_of_make_year,
     fetch_gas_mileage,
     fetch_safety_ratings,
+    fetch_price_of_car
     # fetch_all_makes,
 ]
 
@@ -43,8 +45,8 @@ def tool_specs() -> List[FullToolSpec]:
 # ---------------------------------------------------------------------
 # Dispatcher — now passes tool_use_id and expects a ToolResultContentBlock
 # ---------------------------------------------------------------------
-def dispatch(name: str, connection_id: str, 
-             tool_input: dict, tool_use_id: str, bedrock) -> ToolResultContentBlock:
+def dispatch(name: str, connection_id: str,
+             tool_input: dict, tool_use_id: str, bedrock,debug = True) -> ToolResultContentBlock:
     """
     Dispatch a tool by its exact name, execute it, and optionally summarize the result.
     Always returns a ToolResultContentBlock.
@@ -63,6 +65,10 @@ def dispatch(name: str, connection_id: str,
         tool_input,
         tool_use_id
     )
+    #TODO: Implement debug off here
+    if debug:
+        print ("\n[No summary]", original_tool_result_block.toolResult.content)
+    
     
     summarized_tool: ToolResultContentBlock  = create_summary_result_block(bedrock, original_tool_result_block, 
                                                   executed_tool.prompt())

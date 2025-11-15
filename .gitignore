@@ -28,3 +28,4 @@ CarSuggestionTool.code-workspace
 /frontend (LocalTest)/dist/assets
 /frontend (LocalTest)/dist/Chatbot
 frontend (LocalTest)/dist/index.html
+backend/aws-sam/lambdas/on_send_message_v3/tools/.env

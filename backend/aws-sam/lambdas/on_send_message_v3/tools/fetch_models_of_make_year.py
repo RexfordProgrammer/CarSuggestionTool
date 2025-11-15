@@ -11,6 +11,11 @@ from pydantic_models import (
     FullToolSpec,
 )
 
+def prompt():
+    """Returns Tool Specific Prompt""" 
+    p = "reduce to a plain, not numbered, list of 10 makes and models and years"
+    return p
+
 # ────────────────────────────────────────────────────────────────────────────────
 # Bedrock tool spec (converted to Pydantic)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -71,10 +76,7 @@ def _fetch_from_nhtsa(
         print(f"Error fetching data from NHTSA: {e}")
         return {"error": str(e)}
 
-def prompt():
-    """Returns Tool Specific Prompt""" 
-    p = "reduce to a plain, not numbered, list of 10 makes and models and years"
-    return p
+
 # ────────────────────────────────────────────────────────────────────────────────
 # TOOL ENTRYPOINT — Always returns ToolResultContentBlock
 # ────────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ TOOLS
 fetch_models_of_make_year(make, year)
 fetch_gas_mileage(make, model, year)
 fetch_safety_ratings(make, model, year)
+fetch_price_of_car(make, model, year)
 
 
 CONVERSATION FLOW (STRICT ORDER)

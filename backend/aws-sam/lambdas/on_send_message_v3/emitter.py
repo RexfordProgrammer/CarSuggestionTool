@@ -10,7 +10,7 @@ class WebSocketPayload(BaseModel):
     reply: str
 
 _MAX_FRAME_BYTES = 28_000
-
+DEBUG = True
 def _safe_json(obj: Any) -> str:
     """Safely serialize an object to a JSON string."""
     try:
@@ -69,7 +69,8 @@ class Emitter:
             )
             return True
         except Exception as e: #pylint: disable=broad-exception-caught
-            print(f"Remote emit failed (Connection ID: {self.connection_id}): {e}")
+            if DEBUG:
+                print(f"Remote emit failed (Connection ID: {self.connection_id}): {e}")
             return False
 
     # --- shared send (internal) ---
@@ -85,12 +86,14 @@ class Emitter:
         try:
             text_str = self._to_text(text).strip()
         except Exception as e: #pylint: disable=broad-exception-caught
-            print(f"❌ Failed to coerce text: {e}, payload type={type(text)}")
+            if DEBUG:
+                print(f" Failed to coerce text: {e}, payload type={type(text)}")
             return False
 
         if not text_str:
             return False
-        print(f"[EMIT RAW TEXT - chars]\n{text_str}\n")
+        if DEBUG:
+            print(f"[EMIT RAW TEXT - chars]\n{text_str}\n")
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []
@@ -127,11 +130,12 @@ class Emitter:
             return
         try:
             serialized_data = json.dumps(data, indent=2, default=str)
-            text = f"[DEBUG] {label}:\n" + serialized_data
+            text = f" {label}:\n" + serialized_data
         except Exception: #pylint: disable=broad-exception-caught
-            text = f"[DEBUG] {label}:\n" + str(data)
+            text = f" {label}:\n" + str(data)
 
-        print(f"\n Log: {text}\n")
+        if DEBUG:
+            print(f"\n Log: {text}\n")
         reply_bytes = text.encode("utf-8")
         chunks = []
         if len(reply_bytes) > _MAX_FRAME_BYTES:

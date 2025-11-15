@@ -21,12 +21,12 @@ bedrock = boto3.client(
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
 
-DEBUG = False
+DEBUG = True
 MAX_TURNS = int(os.getenv("MAX_TURNS", "4"))
 
-def call_orchestrator(connection_id: str, apigw) -> None:
+def call_orchestrator(connection_id: str, apigw, local = False) -> None:
     """Entry point called from Lambda — orchestrates one round using only transcript memory."""
-    emitter = Emitter(apigw, connection_id,DEBUG)
+    emitter = Emitter(apigw, connection_id,local)
     emitter.debug_emit("Starting call_orchestrator", {"connection_id": connection_id})
     history: List[Message] = build_history_messages(connection_id)
     ### this begins upon message sent from frontend
@@ -34,7 +34,7 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         history = prune_history(history) ## This may be something we want to do in like the db_helpers
         tool_result_blocks: List[ToolResultContentBlock] = []
 
-        emitter.debug_emit(f"Turn {turn}History: ", history)
+        emitter.debug_emit(f"Turn {turn} - History", history)
 
         tool_specs_list:  List[FullToolSpec] = tool_specs()
         system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS) ## turn aware prompt builder

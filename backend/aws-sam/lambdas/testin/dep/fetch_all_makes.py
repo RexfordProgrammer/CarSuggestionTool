@@ -9,7 +9,11 @@ from pydantic_models import (
     ToolSpec,
     FullToolSpec
 )
-
+def prompt():
+    """Returns Tool Specific Prompt""" 
+    p = "Extract the essential meaning from this JSON data and rewrite it as a brief"+\
+    "plain-English statement. Remove all JSON formatting, IDs, and internal structure noise."
+    return p
 # ────────────────────────────────────────────────────────────────────────────────
 # TOOL SPEC (converted to Pydantic)
 # ────────────────────────────────────────────────────────────────────────────────

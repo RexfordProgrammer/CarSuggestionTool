@@ -1,5 +1,5 @@
 
-HISTORY_WINDOW_SOFT_CLIP = 10 # The number of recent messages to always keep
+HISTORY_WINDOW_SOFT_CLIP = 20 # The number of recent messages to always keep
 
 from typing import List
 from pydantic_models import Message, ToolResultContentBlock,ToolUseContentBlock

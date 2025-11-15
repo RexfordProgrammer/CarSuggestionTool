@@ -3,9 +3,8 @@ from pydantic import BaseModel, Field
 
 class ToolInputSchema(BaseModel):
     """Models the 'inputSchema' part of the tool specification."""
-    # Using alias for schema compatibility with 'json' key
-    json: Dict[str, Any] = Field(..., alias="json") 
-
+    json_data: Dict[str, Any] = Field(..., alias="json")  # ← renamed + alias preserved
+    
 class ToolSpec(BaseModel):
     """The core specification for a single tool."""
     name: str
@@ -42,10 +41,10 @@ class ToolUse(BaseModel):
 class ToolUseContentBlock(BaseModel):
     """A block wrapper for a tool use request."""
     toolUse: ToolUse
-
+    
 class JsonContent(BaseModel):
     """The JSON payload for a tool result."""
-    json: Dict[str, Any]
+    json_data: Dict[str, Any] = Field(..., alias="json")  # ← renamed + alias preserved
 
 # 1. Define the possible content types for a ToolResult
 ToolResultContentType = Union[

@@ -10,19 +10,19 @@ from db_tools_v2 import (build_history_messages, save_assistant_message, save_us
 from pydantic_models import (ConversePayload, FullToolSpec, Message,
                              ToolConfig, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
 from converse_response_pydantic import ConverseResponse
-from tools import dispatch,tool_specs, tool_specs_output
+from tools import tool_specs, tool_specs_output
 from emitter import Emitter
 from system_prompt_builder import build_system_prompt
 from prune_history import prune_history
 from tools import ToolCall
- 
+
 bedrock = boto3.client(
     "bedrock-runtime",
     region_name=os.getenv("AWS_REGION", "us-east-1"),
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
 
-DEBUG = True
+DEBUG = False
 MAX_TURNS = int(os.getenv("MAX_TURNS", "4"))
 
 def call_orchestrator(connection_id: str, apigw) -> None:
@@ -73,7 +73,7 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         tool_calls: list[ToolCall] = []
         for tu in tool_uses:
             emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
-            new_call:ToolCall= ToolCall(tu.name, connection_id, tu.input, tu.toolUseId)
+            new_call:ToolCall= ToolCall(tu.name, connection_id, tu.input, tu.toolUseId, bedrock)
             new_call.start_thread()
             tool_calls.append(new_call)
             # tr_block:ToolResultContentBlock = dispatch(tu.name, connection_id, tu.input, tu.toolUseId)

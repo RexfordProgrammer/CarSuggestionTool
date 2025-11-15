@@ -9,7 +9,11 @@ from pydantic_models import (ToolResultContentBlock, TextContentBlock,
 
 # Define the consistent return type for the handle function
 HandleReturnType = List[Union[JsonContent, TextContentBlock]]
-
+def prompt():
+    """Returns Tool Specific Prompt""" 
+    p = "Extract the essential meaning from this JSON data and rewrite it as a brief"+\
+    "plain-English statement. Remove all JSON formatting, IDs, and internal structure noise."
+    return p
 # ────────────────────────────────────────────────────────────────────────────────
 # Bedrock tool spec
 # ────────────────────────────────────────────────────────────────────────────────

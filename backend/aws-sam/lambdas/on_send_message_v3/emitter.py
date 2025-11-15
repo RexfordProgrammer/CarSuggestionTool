@@ -90,7 +90,7 @@ class Emitter:
 
         if not text_str:
             return False
-        print(f"\n\n [EMIT RAW TEXT - chars]\n{text_str}\n\n")
+        print(f"[EMIT RAW TEXT - chars]\n{text_str}\n")
 
         reply_bytes = text_str.encode("utf-8")
         chunks = []

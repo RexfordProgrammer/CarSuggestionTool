@@ -1,7 +1,7 @@
 '''Caller of Bedrock converse loop'''
 import os
-import time
 from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import boto3
 import botocore
 
@@ -10,11 +10,10 @@ from db_tools_v2 import (build_history_messages, save_assistant_message, save_us
 from pydantic_models import (ConversePayload, FullToolSpec, Message,
                              ToolConfig, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
 from converse_response_pydantic import ConverseResponse
-from tools import tool_specs, tool_specs_output
+from tools import tool_specs, tool_specs_output, dispatch
 from emitter import Emitter
 from system_prompt_builder import build_system_prompt
 from prune_history import prune_history
-from tools import ToolCall
 
 bedrock = boto3.client(
     "bedrock-runtime",
@@ -45,7 +44,7 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",
                                   system=[system_prompt],
                                   messages=history,
-                                  interferenceConfig={"temperature": 0.5},
+                                  inferenceConfig={"temperature": 0.5},
                                   toolConfig=tool_config)
         try:
             resp = bedrock.converse(**payload.to_api_dict())
@@ -70,25 +69,38 @@ def call_orchestrator(connection_id: str, apigw) -> None:
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
         
         #### REFACTOR FROM HERE TO BELOW MARKER INTO METHOD
-        tool_calls: list[ToolCall] = []
-        for tu in tool_uses:
-            emitter.emit(f"Calling tool:{tu.name} input {tu.input}")
-            new_call:ToolCall= ToolCall(tu.name, connection_id, tu.input, tu.toolUseId, bedrock)
-            new_call.start_thread()
-            tool_calls.append(new_call)
-            # tr_block:ToolResultContentBlock = dispatch(tu.name, connection_id, tu.input, tu.toolUseId)
-        
-        finished = False
-        while not finished:
-            finished = True
-            for tc in tool_calls:
-                if tc.tool_response is None:
-                    finished = False
-                    continue
-            time.sleep(.2)
-        
-        for tc in tool_calls:
-            tool_result_blocks.append(tc.tool_response)
+        if tool_uses:
+            emitter.debug_emit("Tool Calls Detected", len(tool_uses))
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                # Submit all tool calls in parallel
+                futures = [
+                    executor.submit(
+                        dispatch,
+                        tu.name,
+                        connection_id,
+                        tu.input,
+                        tu.toolUseId,
+                        bedrock
+                    )
+                    for tu in tool_uses
+                ]
+
+                # Emit progress as they start
+                for tu in tool_uses:
+                    emitter.emit(f"Calling tool: {tu.name}")
+
+                # Collect results as they complete
+                tool_result_blocks = []
+                for future in as_completed(futures, timeout=30):  # 30 sec max per tool
+                    try:
+                        result = future.result()
+                        tool_result_blocks.append(result)
+                    except Exception as e:
+                        # Optional: emit error per tool
+                        emitter.emit(f"Tool failed: {e}")
+                        # Or re-raise if you want to fail fast
+                        raise
+        emitter.debug_emit("All tool results ready", len(tool_result_blocks))
         ###################### THIS WILL RETURN TOOL USE BLOCKS
         
         if tool_result_blocks:

@@ -22,7 +22,6 @@ ALL_TOOLS = [
     # fetch_all_makes,
 ]
 
-import threading
 from small_model_api_summarizer import create_summary_result_block
 
 # ---------------------------------------------------------------------
@@ -88,20 +87,3 @@ def tool_specs_output() -> ToolSpecsOutput:
         tool_config=ToolConfig(tools=tool_config_items),
         specs=[spec.model_dump(by_alias=True) for spec in validated_specs],
     )
-
-class ToolCall:
-    def __init__(self, name: str, connection_id: str, tool_input: dict, tool_use_id: str, bedrock):
-        self.name = name
-        self.connection_id = connection_id
-        self.tool_input = tool_input
-        self.tool_use_id = tool_use_id
-        self.thread_obj = threading.Thread(target=self.call_tool, args=())
-        self.tool_response = None
-        self.bedrock=bedrock
-
-    def start_thread(self):
-        self.thread_obj.start()
-       
-    def call_tool(self):
-        self.tool_response = dispatch(self.name, self.connection_id, self.tool_input, self.tool_use_id,self.bedrock)
-        

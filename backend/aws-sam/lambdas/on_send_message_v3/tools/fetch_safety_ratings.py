@@ -1,24 +1,20 @@
+"""API request fool for fetching saftey ratings"""
 # tools/fetch_safety_ratings.py
-import requests
 from typing import Dict, List, Any, Union
-
-from pydantic_models import (ToolResultContentBlock, TextContentBlock,
-                             JsonContent, ToolResult,
+import requests
+from pydantic_input_comps import (JsonContent, ToolResult,
                              ToolInputSchema, ToolSpec, FullToolSpec)
+from pydantic_models import (ToolResultContentBlock, TextContentBlock)
 
 
-# Define the consistent return type for the handle function
 HandleReturnType = List[Union[JsonContent, TextContentBlock]]
 def prompt():
     """Returns Tool Specific Prompt""" 
     p = "Extract the essential meaning from this JSON data and rewrite it as a brief"+\
     "plain-English statement. Remove all JSON formatting, IDs, and internal structure noise."
     return p
-# ────────────────────────────────────────────────────────────────────────────────
-# Bedrock tool spec
-# ────────────────────────────────────────────────────────────────────────────────
-# Convert the dictionary SPEC into a Pydantic model and then dump it back 
-# to ensure it's structurally correct before being used by the tool loader.
+
+
 SPEC = FullToolSpec(
     toolSpec=ToolSpec(
         name="fetch_safety_ratings",
@@ -76,7 +72,7 @@ def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
         for alt in (year + 1, year - 1):
             try:
                 results = _query_summary(alt, make, model)
-            except Exception:
+            except Exception: #pylint: disable=broad-exception-caught
                 results = []
             if results:
                 year = alt
@@ -103,7 +99,7 @@ def _fetch_safety_rating(year: int, make: str, model: str) -> Dict[str, Any]:
 
         try:
             detail = _query_vehicle_detail(vid)
-        except Exception as e:
+        except Exception as e: #pylint: disable=broad-exception-caught
             detail = {}
             detail["error"] = f"Failed to fetch VehicleId {vid}: {e}"
 
@@ -152,7 +148,7 @@ def handle(connection_id: str, tool_input: Dict[str, Any], tool_use_id: str) -> 
     # ---------------------------
     try:
         result = _fetch_safety_rating(int(year), make, model)
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         tb = TextContentBlock(text=f"Unexpected failure while querying safety ratings: {e}")
         return ToolResultContentBlock(
             toolResult=ToolResult(

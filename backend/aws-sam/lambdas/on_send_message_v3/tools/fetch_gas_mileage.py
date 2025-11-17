@@ -1,16 +1,12 @@
-# tools/fetch_fuel_economy.py
-import requests
-from typing import Dict, Any
+"""This tool make's API calls to get gas milage"""
 import xml.etree.ElementTree as ET
+from typing import Dict, Any
+import requests
+from pydantic_input_comps import (ToolResult, JsonContent, ToolInputSchema, ToolSpec, FullToolSpec)
 
 from pydantic_models import (
     ToolResultContentBlock,
-    ToolResult,
     TextContentBlock,
-    JsonContent,
-    ToolInputSchema,
-    ToolSpec,
-    FullToolSpec
 )
 def prompt():
     """Returns Tool Specific Prompt""" 
@@ -71,7 +67,7 @@ def _get_vehicle_id(year: int, make: str, model: str) -> str:
             options = data.get("menuItem", [])
             return options[0]["value"] if options else None
 
-    except Exception as e:
+    except Exception as e: #pylint disable=broad-exception-caught
         print(f"Error fetching vehicle ID: {e}")
         return None
 
@@ -112,7 +108,7 @@ def _fetch_vehicle_details(vehicle_id: str) -> Dict[str, Any]:
                 "fuel_cost_annual": float(data.get("fuelCost08", 0)),
             }
 
-    except Exception as e:
+    except Exception as e: #pylint disable=broad-exception-caught
         print(f"Error fetching fuel economy details: {e}")
         return {"error": str(e)}
 

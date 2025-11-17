@@ -4,19 +4,14 @@ from typing import Dict, Any, List, Union
 import re
 import requests
 
-from pydantic_models import (
-    ToolResultContentBlock,
-    ToolResult,
-    TextContentBlock,
-    JsonContent,
-    ToolInputSchema,
-    ToolSpec,
-    FullToolSpec,
-)
-
 import json
 import boto3
 from botocore.exceptions import ClientError
+
+from pydantic_input_comps import (ToolResult,JsonContent,
+    ToolInputSchema,ToolSpec,FullToolSpec)
+from pydantic_models import (
+    ToolResultContentBlock,TextContentBlock)
 
 
 def _get_secret(secret_name: str, region_name: str = "us-east-1") -> str | None:
@@ -46,7 +41,7 @@ def _get_secret(secret_name: str, region_name: str = "us-east-1") -> str | None:
         else:
             print(f"[SecretsManager] Error: {e}")
         return None
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         print(f"[SecretsManager] Unexpected error: {e}")
         return None
 
@@ -178,7 +173,7 @@ def _google_price_search(
             "sources": sources[:5],
         }
 
-    except Exception as exc:
+    except Exception as exc: #pylint: disable=broad-exception-caught
         return {"error": str(exc)}
 
 

@@ -1,15 +1,9 @@
-import requests
 from typing import Dict, List, Any, Union
+import requests
 
-from pydantic_models import (
-    ToolResultContentBlock,
-    ToolResult,
-    TextContentBlock,
-    JsonContent,
-    ToolInputSchema,
-    ToolSpec,
-    FullToolSpec,
-)
+from pydantic_input_comps import (ToolResult,JsonContent,ToolInputSchema
+                                  ,ToolSpec,FullToolSpec)
+from pydantic_models import (ToolResultContentBlock, TextContentBlock)
 
 def prompt():
     """Returns Tool Specific Prompt""" 
@@ -72,7 +66,7 @@ def _fetch_from_nhtsa(
             if r.get("Model_Name")
         ]
 
-    except Exception as e:
+    except Exception as e: #pylint: disable=broad-exception-caught
         print(f"Error fetching data from NHTSA: {e}")
         return {"error": str(e)}
 
@@ -80,11 +74,11 @@ def _fetch_from_nhtsa(
 # ────────────────────────────────────────────────────────────────────────────────
 # TOOL ENTRYPOINT — Always returns ToolResultContentBlock
 # ────────────────────────────────────────────────────────────────────────────────
-def handle(connection_id: str, tool_input: Dict[str, Any], tool_use_id: str) -> ToolResultContentBlock:
+def handle(connection_id: str, tool_input: Dict[str, Any],
+           tool_use_id: str) -> ToolResultContentBlock:#pylint disable:unused-argument
     """
     Fetch models for a given make/year and ALWAYS return a ToolResultContentBlock.
     """
-
     year = tool_input.get("year")
     make = tool_input.get("make", "Toyota")
 

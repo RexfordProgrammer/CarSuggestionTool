@@ -1,6 +1,7 @@
-from typing import List 
+"""Builds system Prompt"""
 import os
-from pydantic_models import FullToolSpec, SystemPrompt
+from typing import List 
+from pydantic_input_comps import FullToolSpec, SystemPrompt
 
 def build_system_prompt(specs: List[FullToolSpec], turn: int, max_turns: int) -> SystemPrompt:
     """
@@ -8,12 +9,12 @@ def build_system_prompt(specs: List[FullToolSpec], turn: int, max_turns: int) ->
     and optional appended rules. Adds urgent final-turn directive when appropriate.
     """
     lines = []
-    
+
     # 1. Build tool list
     for s in specs:
         ts = s.toolSpec
         lines.append(f"- {ts.name}: {ts.description}")
-        
+
     allowed_block = "\n".join(lines) or "- (no tools available)"
 
     # 2. Load appendix (unchanged)

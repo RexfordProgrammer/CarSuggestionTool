@@ -1,11 +1,16 @@
-# tools/__init__.py
+"""This fine is the package declaration of tools"""
+# TODO: Refactoring here would probably be ensuring all tools respond never as as dict
+## then removing the dict option as a dict return object in the declations of pydantic models 
+
 from typing import List
-from pydantic_models import (
-    ToolConfig,
-    ToolSpecsOutput,
+from pydantic_input_comps import (
+    ToolSpecsBundle,
     FullToolSpec,
     ToolConfigItem,
-    ToolResultContentBlock,ToolResult,TextContentBlock
+)
+from pydantic_models import (
+    ToolConfig,
+    ToolResultContentBlock,
 )
 
 from . import (
@@ -13,7 +18,6 @@ from . import (
     fetch_gas_mileage,
     fetch_safety_ratings,
     fetch_price_of_car
-    # fetch_all_makes,   # ← don't forget to add this to ALL_TOOLS
 )
 
 ALL_TOOLS = [
@@ -21,30 +25,21 @@ ALL_TOOLS = [
     fetch_gas_mileage,
     fetch_safety_ratings,
     fetch_price_of_car
-    # fetch_all_makes,
 ]
 
 from small_model_api_summarizer import create_summary_result_block
 
-# ---------------------------------------------------------------------
-# Sanity check for duplicate names
-# ---------------------------------------------------------------------
+### Name dedupe
 _tool_names: List[str] = [t.SPEC["toolSpec"]["name"] for t in ALL_TOOLS]
 if len(_tool_names) != len(set(_tool_names)):
     raise RuntimeError(f"Duplicate tool names detected: {_tool_names}")
 
 
-# ---------------------------------------------------------------------
-# Load specs as Pydantic objects
-# ---------------------------------------------------------------------
 def tool_specs() -> List[FullToolSpec]:
     """Gathers Tool Specs as List[FullToolSpec]"""
     return [FullToolSpec.model_validate(t.SPEC) for t in ALL_TOOLS]
 
 
-# ---------------------------------------------------------------------
-# Dispatcher — now passes tool_use_id and expects a ToolResultContentBlock
-# ---------------------------------------------------------------------
 def dispatch(name: str, connection_id: str,
              tool_input: dict, tool_use_id: str, bedrock,debug = True) -> ToolResultContentBlock:
     """
@@ -65,21 +60,17 @@ def dispatch(name: str, connection_id: str,
         tool_input,
         tool_use_id
     )
-    #TODO: Implement debug off here
     if debug:
         print ("\n[No summary]", original_tool_result_block.toolResult.content)
-    
-    
-    summarized_tool: ToolResultContentBlock  = create_summary_result_block(bedrock, original_tool_result_block, 
-                                                  executed_tool.prompt())
+
+    summarized_tool: ToolResultContentBlock = create_summary_result_block(bedrock,
+                                                                         original_tool_result_block,
+                                                                         executed_tool.prompt())
 
     return summarized_tool
 
-
-# ---------------------------------------------------------------------
-# Convert specs into the shape Bedrock expects
-# ---------------------------------------------------------------------
-def tool_specs_output() -> ToolSpecsOutput:
+def output_tool_specs() -> ToolSpecsBundle:
+    """Bundles the Tool Specs into a single returned object"""
     validated_specs: List[FullToolSpec] = [
         FullToolSpec.model_validate(t.SPEC) for t in ALL_TOOLS
     ]
@@ -89,7 +80,7 @@ def tool_specs_output() -> ToolSpecsOutput:
         for spec in validated_specs
     ]
 
-    return ToolSpecsOutput(
+    return ToolSpecsBundle(
         tool_config=ToolConfig(tools=tool_config_items),
         specs=[spec.model_dump(by_alias=True) for spec in validated_specs],
     )

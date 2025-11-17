@@ -3,10 +3,8 @@ from decimal import Decimal
 from typing import Any, List
 import boto3
 from pydantic import ValidationError
-
-from pydantic_models import ToolResultContentBlock
-
-from converse_response_pydantic import (ConverseResponse,Message,TextContentBlock,)
+from pydantic_input_comps import ToolResultContentBlock, TextContentBlock
+from pydantic_models import ConverseResponse, Message
 
 dynamodb = boto3.resource("dynamodb")
 messages_table = dynamodb.Table("messages")

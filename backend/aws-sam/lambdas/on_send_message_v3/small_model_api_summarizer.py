@@ -1,16 +1,8 @@
 """API CALL PARAPHRASER - Pydantic I/O"""
 import json
-
-from pydantic_models import (
-    SystemPrompt, 
-    Message, 
-    TextContentBlock, 
-    InferenceConfig, 
-    ConversePayload, 
-    ConverseResponse, 
-    ToolResultContentBlock,
-    ToolResult
-)
+from pydantic_input_comps import ToolResult
+from pydantic_models import (SystemPrompt, Message, TextContentBlock,
+                             InferenceConfig, ConversePayload, ConverseResponse, ToolResultContentBlock)
 
 MODEL_ID = "ai21.jamba-1-5-mini-v1:0"
 

@@ -7,10 +7,10 @@ import botocore
 
 from db_tools_v2 import (build_history_messages, save_assistant_message, save_user_tool_results)
 
-from pydantic_models import (ConversePayload, FullToolSpec, Message,
-                             ToolConfig, ToolResultContentBlock, ToolSpecsOutput, ToolUse)
-from converse_response_pydantic import ConverseResponse
-from tools import tool_specs, tool_specs_output, dispatch
+from pydantic_input_comps import (FullToolSpec, ToolConfig, ToolSpecsBundle, ToolResultContentBlock)
+from pydantic_resp_comps import (ToolUse)
+from pydantic_models import (ConversePayload, ConverseResponse, Message)
+from tools import tool_specs, output_tool_specs, dispatch
 from emitter import Emitter
 from system_prompt_builder import build_system_prompt
 from prune_history import prune_history
@@ -21,12 +21,11 @@ bedrock = boto3.client(
     config=botocore.config.Config(connect_timeout=5, read_timeout=15),
 )
 
-DEBUG = True
 MAX_TURNS = int(os.getenv("MAX_TURNS", "4"))
 
-def call_orchestrator(connection_id: str, apigw, local = False) -> None:
+def call_orchestrator(connection_id: str, apigw, debug = True) -> None:
     """Entry point called from Lambda — orchestrates one round using only transcript memory."""
-    emitter = Emitter(apigw, connection_id,local)
+    emitter = Emitter(apigw, connection_id,debug)
     emitter.debug_emit("Starting call_orchestrator", {"connection_id": connection_id})
     history: List[Message] = build_history_messages(connection_id)
     ### this begins upon message sent from frontend
@@ -39,7 +38,7 @@ def call_orchestrator(connection_id: str, apigw, local = False) -> None:
         tool_specs_list:  List[FullToolSpec] = tool_specs()
         system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS) ## turn aware prompt builder
         
-        tool_info_blocks: ToolSpecsOutput = tool_specs_output()
+        tool_info_blocks: ToolSpecsBundle = output_tool_specs()
         tool_config: ToolConfig = tool_info_blocks.tool_config
         payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",
                                   system=[system_prompt],
@@ -68,11 +67,10 @@ def call_orchestrator(connection_id: str, apigw, local = False) -> None:
         
         emitter.debug_emit("Tool Calls Detected: ", len(tool_uses))
         
-        #### REFACTOR FROM HERE TO BELOW MARKER INTO METHOD
+        ####  TOOL USES 
         if tool_uses:
             emitter.debug_emit("Tool Calls Detected", len(tool_uses))
             with ThreadPoolExecutor(max_workers=10) as executor:
-                # Submit all tool calls in parallel
                 futures = [
                     executor.submit(
                         dispatch,
@@ -80,25 +78,22 @@ def call_orchestrator(connection_id: str, apigw, local = False) -> None:
                         connection_id,
                         tu.input,
                         tu.toolUseId,
-                        bedrock
+                        bedrock,
+                        debug
                     )
                     for tu in tool_uses
                 ]
 
-                # Emit progress as they start
                 for tu in tool_uses:
                     emitter.emit(f"Calling tool: {tu.name}")
 
-                # Collect results as they complete
                 tool_result_blocks = []
-                for future in as_completed(futures, timeout=30):  # 30 sec max per tool
+                for future in as_completed(futures, timeout=30):
                     try:
                         result = future.result()
                         tool_result_blocks.append(result)
                     except Exception as e:
-                        # Optional: emit error per tool
                         emitter.emit(f"Tool failed: {e}")
-                        # Or re-raise if you want to fail fast
                         raise
         emitter.debug_emit("All tool results ready", len(tool_result_blocks))
         ###################### THIS WILL RETURN TOOL USE BLOCKS

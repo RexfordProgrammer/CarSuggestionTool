@@ -1,77 +1,84 @@
-# tools/fetch_fuel_economy.py
+"""This tool make's API calls to get gas milage"""
+import xml.etree.ElementTree as ET
+from typing import Dict, Any
 import requests
-from typing import Dict, List, Any
+from pydantic_input_comps import (ToolResult, JsonContent, ToolInputSchema, ToolSpec, FullToolSpec)
 
-SPEC = {
-    "toolSpec": {
-        "name": "fetch_gas_mileage",
-        "description": (
-            "get gas mileage of a vehicle with this tool, model optional"
-        ),
-        "inputSchema": {
-            "json": {
+from pydantic_models import (
+    ToolResultContentBlock,
+    TextContentBlock,
+)
+def prompt():
+    """Returns Tool Specific Prompt""" 
+    p = "Extract the essential meaning from this JSON data and rewrite it as a brief"+\
+    "plain-English statement. Remove all JSON formatting, IDs, and internal structure noise."
+    return p
+# ────────────────────────────────────────────────────────────────────────────────
+# TOOL SPEC (converted to Pydantic)
+# ────────────────────────────────────────────────────────────────────────────────
+SPEC = FullToolSpec(
+    toolSpec=ToolSpec(
+        name="fetch_gas_mileage",
+        description="Get gas mileage and CO₂ data for a vehicle (model optional).",
+        inputSchema=ToolInputSchema(
+            json={
                 "type": "object",
                 "properties": {
                     "year": {
                         "type": "integer",
-                        "description": "Model year of the vehicle (e.g., 2022)."
+                        "description": "Model year (e.g., 2022)"
                     },
                     "make": {
                         "type": "string",
-                        "description": "Manufacturer name (e.g., Toyota)."
+                        "description": "Manufacturer (e.g., Toyota)"
                     },
                     "model": {
                         "type": "string",
-                        "description": "Model name (e.g., Camry)."
+                        "description": "Model name (e.g., Camry)"
                     }
                 },
                 "required": ["year", "make", "model"],
                 "additionalProperties": False
             }
-        }
-    }
-}
+        )
+    )
+).model_dump(by_alias=True)
 
+
+# ────────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ────────────────────────────────────────────────────────────────────────────────
 
 def _get_vehicle_id(year: int, make: str, model: str) -> str:
-    """
-    Step 1: Find the vehicle ID for the given year/make/model.
-    This identifies the specific trim or engine configuration.
-    """
     url = f"https://www.fueleconomy.gov/ws/rest/vehicle/menu/options?year={year}&make={make}&model={model}"
+
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
-        # The API often returns XML, but newer responses can be JSON if header included.
+
         if "application/json" not in resp.headers.get("Content-Type", ""):
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(resp.text)
             menu_items = root.findall(".//menuItem")
             if not menu_items:
                 return None
-            # Grab first available vehicle ID
             return menu_items[0].findtext("value")
         else:
             data = resp.json()
             options = data.get("menuItem", [])
             return options[0]["value"] if options else None
-    except Exception as e:
+
+    except Exception as e: #pylint disable=broad-exception-caught
         print(f"Error fetching vehicle ID: {e}")
         return None
 
 
 def _fetch_vehicle_details(vehicle_id: str) -> Dict[str, Any]:
-    """
-    Step 2: Retrieve full fuel economy and CO₂ data for that specific vehicle ID.
-    """
     url = f"https://www.fueleconomy.gov/ws/rest/vehicle/{vehicle_id}"
     try:
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
 
         if "application/json" not in resp.headers.get("Content-Type", ""):
-            # Parse XML to extract common fields
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(resp.text)
             get = lambda tag: root.findtext(tag)
             return {
@@ -100,25 +107,54 @@ def _fetch_vehicle_details(vehicle_id: str) -> Dict[str, Any]:
                 "co2_grams_per_mile": float(data.get("co2TailpipeGpm", 0)),
                 "fuel_cost_annual": float(data.get("fuelCost08", 0)),
             }
-    except Exception as e:
+
+    except Exception as e: #pylint disable=broad-exception-caught
         print(f"Error fetching fuel economy details: {e}")
         return {"error": str(e)}
 
 
-def handle(connection_id: str, tool_input: Dict) -> List[Dict]:
+# ────────────────────────────────────────────────────────────────────────────────
+# TOOL ENTRYPOINT — **Always returns ToolResultContentBlock**
+# ────────────────────────────────────────────────────────────────────────────────
+
+def handle(connection_id: str, tool_input: Dict[str, Any], tool_use_id: str) -> ToolResultContentBlock:
     """
-    Main Bedrock-tool handler.
+    Fetch fuel economy stats for a vehicle and ALWAYS return ToolResultContentBlock.
     """
+
     year = tool_input.get("year")
     make = tool_input.get("make")
     model = tool_input.get("model")
 
+    # 1. Validate input
     if not (year and make and model):
-        return [{"text": "Error: Missing required fields (year, make, model)."}]
+        tb = TextContentBlock(text="Error: Missing required fields (year, make, model).")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
 
+    # 2. Vehicle ID lookup
     vehicle_id = _get_vehicle_id(year, make, model)
     if not vehicle_id:
-        return [{"text": f"No vehicle found for {year} {make} {model}."}]
+        tb = TextContentBlock(text=f"No vehicle found for {year} {make} {model}.")
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
 
+    # 3. Fetch details
     details = _fetch_vehicle_details(vehicle_id)
-    return [{"json": details}]
+
+    # 4. Handle detail error
+    if "error" in details:
+        tb = TextContentBlock(
+            text=f"Could not retrieve details for vehicle ID {vehicle_id}: {details['error']}"
+        )
+        return ToolResultContentBlock(
+            toolResult=ToolResult(toolUseId=tool_use_id, content=[tb])
+        )
+
+    # 5. SUCCESS → JsonContent
+    jc = JsonContent(json=details)
+    return ToolResultContentBlock(
+        toolResult=ToolResult(toolUseId=tool_use_id, content=[jc])
+    )

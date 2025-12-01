@@ -95,6 +95,11 @@ function App() {
     }
   };
 
+   const toggleDebug = () => {
+    const payload = JSON.stringify({action: "toggleDebug"});
+    socketRef.current.send(payload);
+  };
+
   return (
     <>
       <div className="futuristic-bg" aria-hidden="true" />
@@ -141,6 +146,9 @@ function App() {
           />
           <button className="btn px-6 text-lg" type="button" onClick={sendMessage} disabled={!connected}>
             Send
+          </button>
+          <button className="btn px-6 text-lg" type="button" onClick={toggleDebug} disabled={!connected}>
+            Toggle Debug
           </button>
         </div>
 

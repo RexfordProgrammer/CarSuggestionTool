@@ -30,14 +30,14 @@ def call_orchestrator(connection_id: str, apigw, debug = True) -> None:
     history: List[Message] = build_history_messages(connection_id)
     ### this begins upon message sent from frontend
     for turn in range(MAX_TURNS):
-        history = prune_history(history)## This may be something we want to do in like the db_helpers
+        history = prune_history(history) ## This may be something we want to do in like the db_helpers
         tool_result_blocks: List[ToolResultContentBlock] = []
 
         emitter.debug_emit(f"Turn {turn} - History", history)
 
         tool_specs_list:  List[FullToolSpec] = tool_specs()
         system_prompt = build_system_prompt(tool_specs_list, turn, MAX_TURNS) ## turn aware prompt builder
-
+        
         tool_info_blocks: ToolSpecsBundle = output_tool_specs()
         tool_config: ToolConfig = tool_info_blocks.tool_config
         payload = ConversePayload(modelId="ai21.jamba-1-5-large-v1:0",
@@ -59,7 +59,7 @@ def call_orchestrator(connection_id: str, apigw, debug = True) -> None:
         tool_uses: List[ToolUse] = response.get_tool_uses()
 
         if not tool_uses: # If no tools, it's either the final answer or a nudge
-            reply = "".join(assistant_text).strip()
+            reply = "".join(assistant_text).strip() 
             if reply or turn == MAX_TURNS - 1: # If we have a reply, or we've hit max turns, emit and break
                 if reply:
                     emitter.emit(reply)
@@ -97,6 +97,7 @@ def call_orchestrator(connection_id: str, apigw, debug = True) -> None:
                         raise
         emitter.debug_emit("All tool results ready", len(tool_result_blocks))
         ###################### THIS WILL RETURN TOOL USE BLOCKS
+        
         if tool_result_blocks:
             user_tool_result_entry = Message(role="user", content=tool_result_blocks)
             save_user_tool_results(connection_id, tool_result_blocks)

@@ -1,17 +1,29 @@
 # make_pk_sk.py
 import pandas as pd
 
-df = pd.read_csv("nhtsa.csv", dtype=str)  # keep everything as strings
-for col, default in [("MAKE",""), ("MODEL",""), ("MODEL_YR",""), ("BODY_STYLE","NA")]:
-    if col not in df.columns:
-        df[col] = default
-    df[col] = df[col].fillna(default).astype(str).str.strip()
+#what columns to save
+nhtsaSafetyFields = ['MAKE', 'MODEL', 'MODEL_YR', 'BODY_STYLE', 'VEHICLE_TYPE', 'DRIVE_TRAIN', 'NUM_OF_SEATING', 'OVERALL_STARS']
+minimumYear = 2000; #drop any car made before 2000.
 
-# normalize MODEL_YR to 4-digit or '0000'
-df["MODEL_YR"] = df["MODEL_YR"].str.extract(r'(\d{4})', expand=False).fillna("0000")
+#the file to read
+nhtsaSafetyDf = pd.read_csv("backend\\data\\Safercar_data.csv", dtype = str)
 
-df["PK"] = df["MAKE"] + "#" + df["MODEL"]
-df["SK"] = df["MODEL_YR"] + "#" + df["BODY_STYLE"]
+#set default value
+for col, default in [("MAKE",""), ("MODEL",""), ("MODEL_YR","0000"), ("BODY_STYLE",""), ("VEHICLE_TYPE", ""), ("DRIVE_TRAIN", ""), ("NUM_OF_SEATING", ""), ("OVERALL_STARS", "")]:
+    if col not in nhtsaSafetyDf:
+        nhtsaSafetyDf[col] = default
+    nhtsaSafetyDf[col] = nhtsaSafetyDf[col].fillna(default).astype(str).str.strip()
 
-df.to_csv("nhtsa_prepared.csv", index=False)
+#remove unneeded columns
+nhtsaSafetyDf = nhtsaSafetyDf[nhtsaSafetyFields]
+
+#key, can use multiindexing but this is probably easier
+nhtsaSafetyDf['PK'] = nhtsaSafetyDf['MAKE'] + "#" + nhtsaSafetyDf['MODEL']
+nhtsaSafetyDf['SK'] = nhtsaSafetyDf['MODEL_YR'] + "#" + nhtsaSafetyDf['BODY_STYLE']
+
+#drop all cars made before 2000
+nhtsaSafetyDf['MODEL_YR'] = pd.to_numeric(nhtsaSafetyDf['MODEL_YR'], downcast='integer')
+nhtsaSafetyDf.drop(nhtsaSafetyDf.loc[nhtsaSafetyDf['MODEL_YR'] <= minimumYear].index, inplace=False)
+
+nhtsaSafetyDf.to_csv("backend\\data\\nhtsa_prepared.csv", index=False)
 print("✅ Wrote nhtsa_prepared.csv")

@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Car Suggestion Tool — Local WebSocket + HTTP API (Login) for SAM testing with shared dependency layer.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        ORCHESTRATOR_MODEL: ai21.jamba-1-5-large-v1:0
+        LOG_LEVEL: INFO
+    Tracing: Active
+    LoggingConfig:
+      LogFormat: JSON
+      ApplicationLogLevel: INFO
+      SystemLogLevel: INFO
+      LogGroup: !Ref CentralLogGroup
+
+Resources:
+
+  # === CloudWatch Logging ===
+  CentralLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/car-suggestion-tool-local
+      RetentionInDays: 14
+
+  # === HTTP API for /login (CORS-enabled) ===
+  CarSuggestionHttpAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: ["*"]
+        AllowMethods: ["OPTIONS", "POST"]
+        AllowHeaders: ["Content-Type", "Authorization"]
+
+  # === WebSocket API ===
+  CarSuggestionWebSocketAPI:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: CarSuggestionWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  # === WebSocket Stage ===
+  CarSuggestionWebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      StageName: prodv1
+      AutoDeploy: true
+
+  # === Shared Local Layer (dependencies for all Lambdas) ===
+  SharedHelpersLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: shared-helpers-local
+      Description: Common Python dependencies for local SAM testing (requests, PyJWT, etc.)
+      # ✅ Correct relative path (relative to template.local.yaml)
+      ContentUri: ./layers/shared_helpers
+      CompatibleRuntimes:
+        - python3.12
+
+  # === WebSocket Integrations ===
+  OnConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationMethod: POST
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+
+  OnDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationMethod: POST
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+
+  OnDefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationMethod: POST
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDefaultFunction.Arn}/invocations
+
+  OnSendMessageIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationMethod: POST
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnSendMessageFunctionV3.Arn}/invocations
+
+  # === WebSocket Routes ===
+  OnConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target: !Join [ "/", [ "integrations", !Ref OnConnectIntegration ] ]
+
+  OnDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Join [ "/", [ "integrations", !Ref OnDisconnectIntegration ] ]
+
+  OnDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      RouteKey: $default
+      AuthorizationType: NONE
+      Target: !Join [ "/", [ "integrations", !Ref OnDefaultIntegration ] ]
+
+  OnSendMessageRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref CarSuggestionWebSocketAPI
+      RouteKey: sendMessage
+      AuthorizationType: NONE
+      Target: !Join [ "/", [ "integrations", !Ref OnSendMessageIntegration ] ]
+
+  # === WebSocket Permissions ===
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnConnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnDisconnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnDefaultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnDefaultFunction
+      Principal: apigateway.amazonaws.com
+
+  OnSendMessagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnSendMessageFunctionV3
+      Principal: apigateway.amazonaws.com
+
+  # === Lambda Functions ===
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_connect_v2
+      CodeUri: ./lambdas/on_connect/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
+      Layers:
+        - !Ref SharedHelpersLayer
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_disconnect_v2
+      CodeUri: ./lambdas/on_disconnect/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
+      Layers:
+        - !Ref SharedHelpersLayer
+
+  OnDefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_default_v2
+      CodeUri: ./lambdas/on_default/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
+      Layers:
+        - !Ref SharedHelpersLayer
+
+  OnLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_login_v2
+      CodeUri: ./lambdas/on_login/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
+      Layers:
+        - !Ref SharedHelpersLayer
+      Events:
+        ApiLogin:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CarSuggestionHttpAPI
+            Path: /login
+            Method: POST
+        ApiLoginOptions:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CarSuggestionHttpAPI
+            Path: /login
+            Method: OPTIONS
+
+
+  OnSendMessageFunctionV3:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_send_message_v3
+      CodeUri: ./lambdas/on_send_message_v3/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
+      Layers:
+        - !Ref SharedHelpersLayer

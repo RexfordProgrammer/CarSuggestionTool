@@ -1,0 +1,4 @@
+PyJWT
+pydantic
+requests
+dotenv

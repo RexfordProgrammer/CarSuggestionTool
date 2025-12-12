@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Car Suggestion Tool — SAM stack using existing IAM roles for Lambda functions (v2),
+  now with SharedHelpers layer and centralized logging.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Tracing: Active                     # Enable X-Ray tracing
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO                 # Default log level (override per env if needed)
+    LoggingConfig:                      # ✅ Central logging config (applies to all functions)
+      LogFormat: JSON                   # Structured JSON logs for CloudWatch
+      ApplicationLogLevel: INFO
+      SystemLogLevel: INFO
+      LogGroup: !Ref CentralLogGroup
+
+Resources:
+  # === Central CloudWatch Log Group ===
+  CentralLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/car-suggestion-tool
+      RetentionInDays: 14
+
+  # === Lambda Functions ===
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_connect_v2
+      CodeUri: lambdas/on_connect/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_connect-role-sjmk1w3a
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_disconnect_v2
+      CodeUri: lambdas/on_disconnect/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_disconnect-role-44jq4i16
+
+  OnDefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_default_v2
+      CodeUri: lambdas/on_default/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_default-role-ygulmk1z
+
+  OnLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_login_v2
+      CodeUri: lambdas/on_login/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_login-role-02a4udum
+
+  OnSendMessageFunctionV3:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: on_send_message_v3
+      MemorySize: 1024
+      Timeout: 120
+      CodeUri: lambdas/on_send_message_v3/
+      Handler: lambda_function.lambda_handler
+      Role: arn:aws:iam::661364632619:role/service-role/on_send_message-role-zyef6jcd
+

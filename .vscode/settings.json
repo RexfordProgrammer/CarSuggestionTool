@@ -1,5 +1,5 @@
 {
     "python.analysis.extraPaths": [
-        "./backend/aws-sam/layers/shared_helpers/python"
+        "./backend/shared_helpers"
     ]
 }
